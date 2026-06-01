@@ -1,7 +1,7 @@
 ---
 layout: post
 title: "AI-Driven Development Lifecycle for Financial Services"
-summary: "A short draft summary of AWS's AI-DLC model: AI agents accelerate development while humans keep governance, judgment, and accountability."
+summary: "AI-DLC shows how AI agents can coordinate more of the software lifecycle while humans keep governance, judgment, and accountability."
 tags: [ai-development, software-engineering, financial-services, governance]
 source_folder: sources/ai-driven-development-lifecycle-financial-services
 sources:
@@ -12,8 +12,6 @@ sources:
     url: "https://lcmh.fr/en/articles/2026/ai-dlc-transforming-software-development-lifecycle/"
     note: "LCMH article that broadens AI-DLC beyond financial services and highlights developer role changes, adaptive workflows, and AWS-related case studies."
 ---
-
-> Draft status: short source summary. Needs more sources before publishing as a full article.
 
 ## Short summary
 
@@ -29,7 +27,7 @@ A second source from LCMH makes the idea feel broader than one regulated-industr
 
 The LCMH article also adds a useful caution: productivity gains should not be measured only by code volume or velocity. If AI-DLC works, it is because teams combine automation with strong engineering practices such as clear specifications, modular systems, review checkpoints, and human accountability. The interesting question is not just "can AI write more code?" but "can teams safely coordinate more of the lifecycle through AI without losing control?"
 
-## Notes to expand later
+## Future updates
 
 - Compare AWS's AI-DLC framing with "agentic software engineering" and AI pair-programming workflows.
 - Look for examples of teams using AI agents with compliance or audit requirements.
