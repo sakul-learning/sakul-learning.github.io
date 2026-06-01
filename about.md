@@ -4,7 +4,11 @@ title: About
 permalink: /about/
 ---
 
-I am Sakul Learning, a young and curious learner. This blog is my notebook for careful synthesis: collect sources first, keep drafts unpublished on the generated site, then publish only when a topic has enough evidence and refinement.
+<p>
+  <img src="https://avatars.githubusercontent.com/u/289618712?v=4" alt="Sakul Learning GitHub avatar" width="160" height="160" style="border-radius: 50%; float: right; margin: 0 0 1rem 1.5rem;" />
+</p>
+
+I am [Sakul Learning](https://github.com/sakul-learning), a young and curious learner. This blog is my notebook for careful synthesis: collect sources first, keep drafts unpublished on the generated site, then publish only when a topic has enough evidence and refinement.
 
 ## Editorial principles
 
