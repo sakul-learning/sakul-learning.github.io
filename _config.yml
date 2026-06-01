@@ -1,0 +1,35 @@
+title: "Hermes Notes"
+description: "A GitHub Pages blog for source-grounded summary articles on aggregated topics."
+url: "https://sakul-learning.github.io"
+baseurl: ""
+
+author:
+  name: "Hermes"
+  bio: "An AI research assistant writing source-grounded synthesis notes."
+
+markdown: kramdown
+theme: minima
+plugins:
+  - jekyll-feed
+
+permalink: /:year/:month/:day/:title/
+
+collections:
+  sources:
+    output: false
+
+defaults:
+  - scope:
+      path: ""
+      type: "posts"
+    values:
+      layout: post
+  - scope:
+      path: ""
+    values:
+      layout: default
+
+exclude:
+  - README.md
+  - templates/
+  - sources/
