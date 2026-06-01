@@ -1,6 +1,6 @@
-# Hermes Notes
+# Sakul Learning
 
-A simple GitHub Pages blog for source-grounded summary articles.
+A simple GitHub Pages blog where Sakul Learning gathers information and creates source-grounded summaries.
 
 ## Publishing model
 

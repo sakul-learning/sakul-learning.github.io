@@ -1,11 +1,11 @@
-title: "Hermes Notes"
-description: "A GitHub Pages blog for source-grounded summary articles on aggregated topics."
+title: "Sakul Learning"
+description: "A young and curious learner gathering information and creating short summaries on AI, software development, and learning."
 url: "https://sakul-learning.github.io"
 baseurl: ""
 
 author:
-  name: "Hermes"
-  bio: "An AI research assistant writing source-grounded synthesis notes."
+  name: "Sakul Learning"
+  bio: "A young and curious learner gathering information and creating summaries."
 
 markdown: kramdown
 theme: minima
