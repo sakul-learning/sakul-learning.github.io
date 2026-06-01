@@ -21,7 +21,7 @@ But that misses the deeper constraint.
 
 A lot of software work does not fail because the code was typed too slowly. It fails because the team did not yet know what **good** meant.
 
-That is the useful distinction in Joe's essay, **"R&D Is Two Jobs, and Research Doesn't Run on Autopilot."** Research and development are often compressed into one phrase, but they are different types of work. Research discovers the target. Development executes against a target.
+That is the useful distinction in Joe's essay, **["R&D Is Two Jobs, and Research Doesn't Run on Autopilot"](https://joe.dev/posts/research-vs-development/)**. Research and development are often compressed into one phrase, but they are different types of work. Research discovers the target. Development executes against a target.
 
 Spec-driven development sits exactly at that boundary.
 
@@ -70,7 +70,7 @@ In other words, development scales when the specification is good enough.
 
 ## Specifications are feedback devices
 
-The second article, **"The Feedback Principle,"** gives another way to understand specifications.
+The second article, **["The Feedback Principle"](https://specdriven.com/first-principles/feedback-principle)**, gives another way to understand specifications.
 
 Its central claim is simple: the earlier feedback is detected, the cheaper it is to handle.
 
@@ -233,7 +233,3 @@ In the age of AI coding agents, this becomes even more important. The future of 
 
 The spec is where that clarity lives.
 
-## Sources
-
-- Joe.dev: [R&D Is Two Jobs, and Research Doesn't Run on Autopilot](https://joe.dev/posts/research-vs-development/), accessed June 1, 2026.
-- Spec-Driven: [The Feedback Principle](https://specdriven.com/first-principles/feedback-principle), accessed June 1, 2026.
