@@ -73,6 +73,13 @@ Migrating memories from ChatGPT into Hermes should not be treated as a direct co
 - Key point: secondary reports describe Anthropic/Claude-style dreaming as offline memory consolidation: merge duplicates, resolve contradictions, prune stale references, identify recurring patterns, and output a reviewable memory store.
 - Design implication: Hermes should support dream passes as reviewable diffs, not silent destructive rewrites.
 
+### csctf / public shared conversation export
+
+- URL: https://github.com/Dicklesworthstone/chat_shared_conversation_to_file
+- Key point: `csctf` converts public share URLs from ChatGPT, Claude, Gemini, and Grok into Markdown and HTML transcripts.
+- Design implication: individual shared conversations should be treated as source material for the memory pipeline. They can be fetched into a data/source folder, spot-checked, summarized, and then classified into memory, notes, skills, archive, or discard.
+- Skill framing added to article: a reusable Hermes skill should include trigger phrases, generic output conventions, installation/repair notes, verification steps, reporting format, and pitfalls. The published example intentionally omits machine-specific installation paths.
+
 ## Proposed migration prompt
 
 ```text
