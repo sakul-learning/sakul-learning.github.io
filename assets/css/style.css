@@ -1,7 +1,8 @@
 /* ==========================================================================
-   Sakul Learning — Editorial Luxury design system
+   Sakul Learning — Editorial design system (violet × green duotone)
    Hand-written CSS. No build step, no framework.
-   Aesthetic: warm paper light / deep ink dark, high-contrast variable serif
+   Aesthetic: cool paper light / violet-black dark, green↔violet accents,
+   high-contrast variable serif
    display (Fraunces), refined reading serif body (Newsreader), grain texture,
    generous spatial rhythm, nested "bezel" cards, custom-easing motion.
    ========================================================================== */
@@ -10,18 +11,20 @@
 :root {
   color-scheme: light dark;
 
-  /* Light (paper) palette */
-  --paper:        #faf6ee;
-  --paper-tint:   #f3ede0;
-  --ink:          #211b16;
-  --ink-soft:     #4a4138;
-  --ink-faint:    #8a7e6f;
-  --line:         #e3dac8;
-  --card:         #fffdf8;
-  --accent:       #b4532a; /* terracotta */
-  --accent-soft:  #c8a78d;
-  --code-bg:      #f1e9da;
-  --code-ink:     #6a4a2f;
+  /* Light palette — violet × green duotone on cool paper */
+  --paper:        #f6f5fb;
+  --paper-tint:   #eceaf6;
+  --ink:          #1b1a24;
+  --ink-soft:     #45415a;
+  --ink-faint:    #7b7790;
+  --line:         #e3e0f0;
+  --card:         #ffffff;
+  --accent:       #7c3aed; /* violet */
+  --accent-2:     #0e9f6e; /* green  */
+  --accent-soft:  #b8a6f0;
+  --grad:         linear-gradient(120deg, var(--accent-2), var(--accent));
+  --code-bg:      #efedf9;
+  --code-ink:     #5b3aa6;
 
   /* Curves & rhythm */
   --ease:         cubic-bezier(0.32, 0.72, 0, 1);
@@ -32,25 +35,26 @@
 
   /* Soft, diffused ambient shadow (no harsh black) */
   --shadow:
-    0 1px 1px rgba(60, 44, 28, 0.04),
-    0 8px 24px -12px rgba(60, 44, 28, 0.18),
-    0 30px 60px -40px rgba(60, 44, 28, 0.30);
+    0 1px 1px rgba(40, 30, 70, 0.05),
+    0 8px 24px -12px rgba(40, 30, 70, 0.18),
+    0 30px 60px -40px rgba(40, 30, 70, 0.32);
   --grain-opacity: 0.035;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper:       #14110d;
-    --paper-tint:  #1b1712;
-    --ink:         #efe7d8;
-    --ink-soft:    #c4b9a6;
-    --ink-faint:   #8d8270;
-    --line:        #2c2620;
-    --card:        #1c1813;
-    --accent:      #e08a5a;
-    --accent-soft: #6d4a32;
-    --code-bg:     #211c15;
-    --code-ink:    #e6c79f;
+    --paper:       #0e0d16;
+    --paper-tint:  #16131f;
+    --ink:         #eae8f6;
+    --ink-soft:    #bab5d0;
+    --ink-faint:   #837f99;
+    --line:        #272239;
+    --card:        #16131f;
+    --accent:      #a78bfa; /* violet */
+    --accent-2:    #34d399; /* green  */
+    --accent-soft: #5b4a99;
+    --code-bg:     #1a1629;
+    --code-ink:    #cbbdf3;
     --shadow:
       0 1px 1px rgba(0, 0, 0, 0.30),
       0 10px 30px -16px rgba(0, 0, 0, 0.55),
@@ -73,8 +77,9 @@ body {
   color: var(--ink);
   background-color: var(--paper);
   background-image:
-    radial-gradient(120% 90% at 12% -10%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 55%),
-    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent-soft) 16%, transparent), transparent 50%);
+    radial-gradient(120% 90% at 8% -10%, color-mix(in srgb, var(--accent-2) 16%, transparent), transparent 55%),
+    radial-gradient(115% 95% at 100% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 52%),
+    radial-gradient(90% 80% at 60% 120%, color-mix(in srgb, var(--accent-2) 10%, transparent), transparent 55%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -173,11 +178,11 @@ hr {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  color: var(--accent);
+  color: var(--accent-2);
   padding: 0.35em 0.9em;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-2) 38%, transparent);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  background: color-mix(in srgb, var(--accent-2) 9%, transparent);
 }
 
 /* ---- Layout shell --------------------------------------------------------- */
@@ -250,6 +255,14 @@ nav a:hover {
 .hero h1 {
   margin: 0.4em 0 0.3em;
   max-width: 16ch;
+  /* green → violet gradient text — the duotone signature */
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .hero h1 { color: var(--accent); background: none; }
 }
 .hero p {
   font-size: 1.32rem;
@@ -274,7 +287,7 @@ nav a:hover {
   content: "";
   width: 7px; height: 7px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--grad);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 .section-label::after {
@@ -439,27 +452,29 @@ pre code { background: none; padding: 0; color: var(--ink); }
   text-transform: uppercase;
   letter-spacing: 0.22em;
   color: var(--ink-faint);
-  margin: 0 0 0.9rem 0.85rem;
+  margin: 0 0 0.9rem 0;
 }
-.toc ul { list-style: none; margin: 0; padding: 0; max-width: none; }
-.toc li { margin: 0; }
+/* Hierarchical bulleted list: green discs for top-level (h2),
+   violet hollow bullets for nested (h3). */
+.toc ul { margin: 0; padding-left: 1.15rem; max-width: none; }
+.toc > ul { list-style: disc; }
+.toc ul ul { list-style: circle; margin-top: 0.1rem; padding-left: 1.05rem; }
+.toc li { margin: 0.12rem 0; }
+.toc li::marker { color: var(--accent-2); }
+.toc ul ul li::marker { color: var(--accent); }
 .toc a {
-  display: block;
-  padding: 0.28rem 0 0.28rem 0.85rem;
-  border-left: 2px solid var(--line);
-  font-size: 0.86rem;
-  line-height: 1.35;
+  display: inline-block;
+  padding: 0.12rem 0;
+  font-size: 0.88rem;
+  line-height: 1.32;
   color: var(--ink-faint);
   background: none;
-  transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
+  transition: color 0.25s var(--ease);
 }
-.toc a:hover { color: var(--ink-soft); border-color: var(--accent-soft); }
-.toc li.toc--sub a { padding-left: 1.7rem; font-size: 0.8rem; }
-.toc a.is-active {
-  color: var(--accent);
-  border-color: var(--accent);
-  font-weight: 500;
-}
+.toc ul ul a { font-size: 0.82rem; }
+.toc a:hover { color: var(--ink); }
+.toc a.is-active { color: var(--accent); font-weight: 500; }
+.toc li:has(> a.is-active)::marker { color: var(--accent); }
 
 /* Anchored headings shouldn't hide under the sticky nav when jumped to */
 .post h2[id], .post h3[id] { scroll-margin-top: 6rem; }
