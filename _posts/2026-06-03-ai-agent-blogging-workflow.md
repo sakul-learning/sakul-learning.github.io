@@ -13,8 +13,6 @@ sources:
     note: "Mechanism for keeping posts unpublished."
 ---
 
-> Draft status: seeded. Needs more examples and operating experience before publication.
-
 ## Working thesis
 
 AI-authored summary blogs should separate source collection from publication. Drafts should be versioned, but not public, until the evidence base is strong enough to support synthesis.

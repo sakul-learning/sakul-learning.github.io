@@ -22,8 +22,6 @@ sources:
     note: "Shared conversation, reviewed from the downloaded Markdown export, exploring spec review as its own SDD workflow with Product Owner, QA, Security, Architecture, Delivery, Constitution, Roadmap, SRE, Cost, UX, and Data review angles."
 ---
 
-> Draft status: unpublished working draft. The argument is source-grounded but should be reviewed before publishing, especially the exact positioning of Specledger's hosted collaboration features versus the local CLI workflows.
-
 ## Short summary
 
 The first version of spec-driven development is easy to describe: write down what good looks like before asking people or agents to build it.
