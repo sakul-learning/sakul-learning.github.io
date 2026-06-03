@@ -19,7 +19,7 @@ sources:
     note: "Earlier article establishing the core SDD argument: research discovers the target, specifications make it inspectable, development executes against it, and feedback keeps the system honest."
   - title: "ChatGPT shared conversation: Spec Driven Review Process"
     url: "https://chatgpt.com/share/6a1f652e-9b24-83ec-8cae-f6fbe0bccc2f"
-    note: "Shared ChatGPT conversation page was reachable and titled 'Spec Driven Review Process'; accessible page data also included discussion/search context around slash commands, workflows, review, and Claude Code command patterns."
+    note: "Shared conversation, reviewed from the downloaded Markdown export, exploring spec review as its own SDD workflow with Product Owner, QA, Security, Architecture, Delivery, Constitution, Roadmap, SRE, Cost, UX, and Data review angles."
 ---
 
 > Draft status: unpublished working draft. The argument is source-grounded but should be reviewed before publishing, especially the exact positioning of Specledger's hosted collaboration features versus the local CLI workflows.
@@ -58,6 +58,16 @@ But AI agents change the pressure on the process.
 If a human misreads vague intent, the team may lose a day. If a powerful agent misreads vague intent, it can produce a large, plausible, internally consistent wrong implementation very quickly. Cheap code generation makes the quality of the target more important, not less.
 
 So SDD needs to evolve beyond "write a spec, then implement." It needs an operating model for collaboration.
+
+The downloaded **"Spec Driven Review Process"** conversation makes this more concrete. The starting point was a Product Owner describing how much real review work happens before code review: reading a spec for implicit intent, inconsistency, terminology drift, muddled concepts, scope that can be reduced, phase boundaries, roadmap consequences, and decisions that will constrain future work.
+
+That is a useful correction to how people often talk about AI coding. The review surface is not only the pull request. In SDD, the specification itself needs review because it is the thing the implementation will optimize against.
+
+The best short version from that conversation was:
+
+> Does this document create a coherent, executable path from intent to delivery while minimizing ambiguity, risk, waste, and future rework?
+
+That question belongs before implementation. It turns spec review into an explicit quality function rather than an informal human habit.
 
 ## Specledger's useful reframing
 
@@ -110,6 +120,29 @@ The commands repeatedly encode the same pattern:
 
 This is SDD becoming operational.
 
+## Spec review becomes a first-class workflow
+
+The ChatGPT conversation also sketched a review pipeline that fits naturally into Specledger's world.
+
+The important move is to stop treating "review" as one generic pass. A useful spec review has angles, and each angle looks for different failure modes:
+
+- **Product Owner:** implicit intent, terminology drift, muddled concepts, downscope opportunities, phase boundaries, stakeholder alignment, and roadmap impact
+- **QA:** testability, acceptance criteria, edge cases, negative paths, undefined success and failure states, and regression risk
+- **Security:** trust boundaries, authentication, authorization, secrets, data exposure, auditability, supply chain, abuse cases, and multi-tenancy
+- **Architecture:** system boundaries, module boundaries, API contracts, data flow, coupling, extensibility, reversibility, migration paths, and technical debt
+- **Delivery:** sequencing, hidden dependencies, team boundaries, critical path, milestones, and risk concentration
+- **Constitution:** whether the proposed work passes, weakly aligns with, or violates the project's operating principles
+- **Roadmap:** decisions that constrain future roadmap items, scope that should move in or out of the workstream, and sequencing across future work
+- **Operations, Cost, UX, and Data:** production ownership, lifecycle cost, human workflow clarity, and data lifecycle concerns
+
+That list is valuable because it explains why a single reviewer often misses things. A QA reviewer is looking for objective testability. A roadmap reviewer is looking for future constraint. A constitution reviewer is looking for principle violations. A Product Owner is looking for intent clarity and scope control.
+
+The review pipeline from the conversation also had a practical entrypoint: inspect which artifacts actually exist, then ask the user which artifacts and reviewers are in scope. Maybe the filesystem only has `spec.md`. Maybe it also has `plan.md`, `quickstart.md`, a constitution, and a roadmap. Review should still be possible with the available artifacts, but missing artifacts should be treated as missing context rather than automatic failure.
+
+That is exactly the kind of workflow a ledger can preserve. Each finding can be anchored to an artifact location, classified by severity, tied to evidence, assigned a suggested resolution, and turned into a question with a recommended answer when human judgment is required.
+
+The most interesting pattern was borrowed from Matt Pocock's `grill-me` skill: ask one question at a time, provide a recommended answer, and inspect the codebase or artifacts instead of asking the user when the answer is already discoverable. For SDD, that becomes a disciplined way to resolve ambiguity without turning review into an endless meeting.
+
 ## From linear commands to collaborative workflows
 
 The improved prompts in `skillrig/cli` push the idea further.
@@ -141,10 +174,12 @@ This is the loop becoming inspectable:
 1. specify intent
 2. clarify decisions
 3. plan implementation
-4. verify artifacts
-5. execute workflow
-6. checkpoint divergence
-7. update the spec or fix the implementation
+4. run multi-angle spec review
+5. resolve high-impact ambiguities one question at a time
+6. verify artifacts
+7. execute workflow
+8. checkpoint divergence
+9. update the spec or fix the implementation
 
 ## A platform for shared SDD workflows
 
@@ -176,6 +211,8 @@ In an evolved SDD workflow, humans steer earlier:
 
 - approve or correct requirements
 - resolve clarifying questions
+- choose which reviewers and artifacts are in scope
+- judge findings from Product, QA, Security, Architecture, Delivery, Constitution, Roadmap, SRE, Cost, UX, and Data angles
 - review tradeoffs in the plan
 - decide when ambiguity is acceptable
 - choose which risks need spikes

@@ -99,14 +99,23 @@ Spec-driven development is evolving from static specifications into shared workf
 ### ChatGPT shared conversation
 
 - URL: https://chatgpt.com/share/6a1f652e-9b24-83ec-8cae-f6fbe0bccc2f
-- Accessibility check:
-  - Page reachable via `web_extract` and direct HTTP fetch.
-  - Title found: "ChatGPT - Spec Driven Review Process".
-  - Direct extraction returned only the title and generic page shell, but direct HTML fetch returned a large page payload (~497 KB) with embedded share data and visible signals around "workflow", "review", "slash command", and Claude Code command/search context.
-- Caveat:
-  - The full turn-by-turn conversation text was not cleanly extractable with the simple web extraction pass; avoid making detailed claims that depend on exact unseen turns.
+- Local downloaded export:
+  - Markdown: `/data/chatgpt-shares/chatgpt-share-6a1f652e-9b24-83ec-8cae-f6fbe0bccc2f.md`
+  - HTML: `/data/chatgpt-shares/chatgpt-share-6a1f652e-9b24-83ec-8cae-f6fbe0bccc2f.html`
+  - Markdown spot check: 24,317 bytes, 919 lines.
+  - Title: "Spec Driven Review Process".
+- Key ideas from the conversation:
+  - Spec review should be treated as a first-class SDD quality function, not as an informal prelude to code review.
+  - Primary Product Owner review question: "Does this document create a coherent, executable path from intent to delivery while minimizing ambiguity, risk, waste, and future rework?"
+  - Product Owner review looks for implicit intent, ambiguous/missing/contradictory requirements, terminology inconsistencies, muddled concepts, downscope opportunities, phase boundaries, dependencies between workstreams, assumptions, roadmap impacts, and stakeholder gaps.
+  - Multi-angle review list: Product Owner, Architecture, Security, QA/Test Strategy, Operations/SRE, Cost/FinOps, Product Strategy, UX, Program/Delivery, Constitution, Roadmap, and Data.
+  - Dynamic workflow entrypoint should discover which artifacts exist (`spec.md`, `plan.md`, `quickstart.md`, constitution, roadmap, etc.), then ask which artifacts and reviewers are in scope.
+  - Review must still be possible when only `spec.md` exists; missing artifacts are missing context, not automatic failure.
+  - Shared reviewer contract: ground findings in artifact sections, use web/docs lookup for current external guidance, prefer clarification over assumption, prefer scope reduction over expansion, prefer phased delivery over large-batch delivery, validate against constitution and roadmap when available.
+  - Finding shape: reviewer, severity, artifact, location, evidence, issue, impact, suggested resolution, question for user, recommended answer.
+  - Use Matt Pocock's `grill-me` discipline for unresolved decisions: walk the decision tree one branch at a time, ask one question at a time, provide a recommended answer, and inspect artifacts/code instead of asking when discoverable.
 - Article use:
-  - Safe to cite as reachable shared context titled "Spec Driven Review Process" and as general background for command/review workflow direction, not as a source for precise quotations unless manually extracted later.
+  - Added a new section, "Spec review becomes a first-class workflow," and revised the human-steering/loop sections to include reviewer selection, artifact scope, multi-angle review, and one-question-at-a-time ambiguity resolution.
 
 ## Argument structure
 
@@ -114,15 +123,16 @@ Spec-driven development is evolving from static specifications into shared workf
 2. Explain why AI agents require stronger workflow structure: high-throughput ambiguity amplification.
 3. Introduce Specledger as a platform that treats SDD as collaboration/coordination infrastructure.
 4. Use `.agents/commands` as concrete evidence for lifecycle shape.
-5. Use Skillrig workflow prompts to show evolution from linear commands to deterministic multi-agent workflow.
-6. Emphasize human steering points and decision quality.
-7. Explain ledger/memory value: deltas, checkpoints, session indexing, reusable context.
-8. Note tension between speed and durable traceability; propose calibrated traceability.
-9. Conclude: future SDD is shared workflow infrastructure, not more static documentation.
+5. Add the downloaded ChatGPT conversation's missing layer: spec review is its own multi-angle workflow.
+6. Use Skillrig workflow prompts to show evolution from linear commands to deterministic multi-agent workflow.
+7. Emphasize human steering points and decision quality.
+8. Explain ledger/memory value: deltas, checkpoints, session indexing, reusable context.
+9. Note tension between speed and durable traceability; propose calibrated traceability.
+10. Conclude: future SDD is shared workflow infrastructure, not more static documentation.
 
 ## Open review questions
 
 - Should the article include specific screenshots or UI details from the Specledger dashboard? Current draft only uses extracted product-site text.
-- Should the ChatGPT share be quoted directly? Need deeper extraction or user-provided excerpts before making exact claims.
+- Should the direct Product Owner review question be quoted as-is in the final article, or paraphrased as a working framing?
 - Should the article compare Specledger to GitHub Issues/Jira/Linear or avoid competitive framing?
 - Should the article mention the current CLI command names as examples only, or present them as the recommended SDD sequence?
