@@ -1,35 +1,509 @@
+/* ==========================================================================
+   Sakul Learning — Editorial Luxury design system
+   Hand-written CSS. No build step, no framework.
+   Aesthetic: warm paper light / deep ink dark, high-contrast variable serif
+   display (Fraunces), refined reading serif body (Newsreader), grain texture,
+   generous spatial rhythm, nested "bezel" cards, custom-easing motion.
+   ========================================================================== */
+
+/* ---- Design tokens -------------------------------------------------------- */
 :root {
   color-scheme: light dark;
-  --bg: #0f172a;
-  --panel: #111827;
-  --text: #e5e7eb;
-  --muted: #9ca3af;
-  --accent: #38bdf8;
-  --line: #1f2937;
+
+  /* Light (paper) palette */
+  --paper:        #faf6ee;
+  --paper-tint:   #f3ede0;
+  --ink:          #211b16;
+  --ink-soft:     #4a4138;
+  --ink-faint:    #8a7e6f;
+  --line:         #e3dac8;
+  --card:         #fffdf8;
+  --accent:       #b4532a; /* terracotta */
+  --accent-soft:  #c8a78d;
+  --code-bg:      #f1e9da;
+  --code-ink:     #6a4a2f;
+
+  /* Curves & rhythm */
+  --ease:         cubic-bezier(0.32, 0.72, 0, 1);
+  --measure:      68ch;
+  --shell:        min(46rem, 92vw);
+  --radius:       1.4rem;
+  --radius-inner: calc(var(--radius) - 0.4rem);
+
+  /* Soft, diffused ambient shadow (no harsh black) */
+  --shadow:
+    0 1px 1px rgba(60, 44, 28, 0.04),
+    0 8px 24px -12px rgba(60, 44, 28, 0.18),
+    0 30px 60px -40px rgba(60, 44, 28, 0.30);
+  --grain-opacity: 0.035;
 }
 
-* { box-sizing: border-box; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper:       #14110d;
+    --paper-tint:  #1b1712;
+    --ink:         #efe7d8;
+    --ink-soft:    #c4b9a6;
+    --ink-faint:   #8d8270;
+    --line:        #2c2620;
+    --card:        #1c1813;
+    --accent:      #e08a5a;
+    --accent-soft: #6d4a32;
+    --code-bg:     #211c15;
+    --code-ink:    #e6c79f;
+    --shadow:
+      0 1px 1px rgba(0, 0, 0, 0.30),
+      0 10px 30px -16px rgba(0, 0, 0, 0.55),
+      0 40px 70px -45px rgba(0, 0, 0, 0.75);
+    --grain-opacity: 0.05;
+  }
+}
+
+/* ---- Reset & base --------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
 body {
   margin: 0;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  line-height: 1.65;
-  background: radial-gradient(circle at top left, #1e293b, var(--bg) 45%);
-  color: var(--text);
+  min-height: 100dvh;
+  font-family: "Newsreader", Georgia, "Times New Roman", serif;
+  font-size: 1.18rem;
+  line-height: 1.72;
+  color: var(--ink);
+  background-color: var(--paper);
+  background-image:
+    radial-gradient(120% 90% at 12% -10%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 55%),
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--accent-soft) 16%, transparent), transparent 50%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.site-header, .site-footer, .container { max-width: 860px; margin: 0 auto; padding: 1.25rem; }
-.site-header { display: flex; justify-content: space-between; gap: 1rem; align-items: center; border-bottom: 1px solid var(--line); }
-.site-title { font-weight: 800; color: var(--text); }
-nav { display: flex; gap: 1rem; flex-wrap: wrap; }
-.container { padding-top: 3rem; padding-bottom: 3rem; }
-.hero, .page, .post, section { background: color-mix(in srgb, var(--panel) 78%, transparent); border: 1px solid var(--line); border-radius: 18px; padding: 1.5rem; margin-bottom: 1.5rem; }
-.hero h1, .post h1, .page h1 { margin-top: 0; line-height: 1.1; }
-.post-list { list-style: none; padding: 0; }
-.post-list li { padding: 1rem 0; border-top: 1px solid var(--line); }
-.post-list time, .meta, .eyebrow { display: block; color: var(--muted); font-size: 0.9rem; }
-.summary { font-size: 1.1rem; color: var(--muted); }
-.site-footer { color: var(--muted); border-top: 1px solid var(--line); }
-code, pre { background: #020617; border-radius: 6px; }
-code { padding: 0.1rem 0.3rem; }
-pre { overflow-x: auto; padding: 1rem; }
+
+/* Fixed film-grain overlay — atmosphere without hurting scroll perf */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+}
+
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+/* Visible keyboard focus everywhere (no element clears it without a replacement) */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Skip link — visually hidden until focused */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  transform: translate(-50%, -150%);
+  z-index: 50;
+  padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: "Fraunces", serif;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow);
+  transition: transform 0.3s var(--ease);
+}
+.skip-link:focus { transform: translate(-50%, 0); }
+
+img { max-width: 100%; height: auto; }
+
+/* ---- Typography ----------------------------------------------------------- */
+h1, h2, h3, h4 {
+  font-family: "Fraunces", Georgia, serif;
+  font-weight: 560;
+  line-height: 1.08;
+  letter-spacing: -0.018em;
+  color: var(--ink);
+  font-optical-sizing: auto;
+  text-wrap: balance;
+}
+h1 { font-size: clamp(2.4rem, 1.6rem + 3.6vw, 4rem); font-variation-settings: "SOFT" 0, "WONK" 1; }
+h2 { font-size: clamp(1.7rem, 1.3rem + 1.8vw, 2.3rem); margin-top: 2.6em; }
+h3 { font-size: clamp(1.3rem, 1.1rem + 0.8vw, 1.55rem); margin-top: 2em; }
+
+p, ul, ol { max-width: var(--measure); }
+p { margin: 0 0 1.25em; }
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  background-image: linear-gradient(currentColor, currentColor);
+  background-size: 0% 1px;
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  transition: background-size 0.4s var(--ease), color 0.3s var(--ease);
+}
+a:hover { background-size: 100% 1px; }
+
+blockquote {
+  margin: 1.8em 0;
+  padding: 0.4em 0 0.4em 1.4em;
+  border-left: 2px solid var(--accent);
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+hr {
+  border: 0;
+  height: 1px;
+  margin: 3em 0;
+  background: linear-gradient(90deg, transparent, var(--line) 20%, var(--line) 80%, transparent);
+}
+
+/* Eyebrow / pill tag */
+.eyebrow {
+  display: inline-block;
+  font-family: "Fraunces", serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--accent);
+  padding: 0.35em 0.9em;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+/* ---- Layout shell --------------------------------------------------------- */
+.container,
+.site-footer-inner { position: relative; z-index: 2; }
+
+.container {
+  width: var(--shell);
+  margin: 0 auto;
+  padding: 4.5rem 0 6rem;
+}
+
+/* ---- Floating glass nav --------------------------------------------------- */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  justify-content: center;
+  padding: 1.1rem 1rem 0;
+}
+.site-header__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  width: var(--shell);
+  max-width: 100%;
+  padding: 0.6rem 0.7rem 0.6rem 1.4rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--ink) 9%, transparent);
+  background: color-mix(in srgb, var(--card) 72%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.15);
+  backdrop-filter: blur(10px) saturate(1.15);
+  box-shadow: var(--shadow);
+}
+.site-title {
+  font-family: "Fraunces", serif;
+  font-weight: 600;
+  font-size: 1.12rem;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  background: none;
+}
+.site-title:hover { background: none; color: var(--accent); }
+nav {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+nav a {
+  padding: 0.45em 1em;
+  border-radius: 999px;
+  font-family: "Fraunces", serif;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  background: none;
+  transition: background-color 0.35s var(--ease), color 0.35s var(--ease);
+}
+nav a:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  color: var(--ink);
+}
+
+/* ---- Hero ----------------------------------------------------------------- */
+.hero {
+  margin-bottom: 4rem;
+  padding-bottom: 0.5rem;
+}
+.hero h1 {
+  margin: 0.4em 0 0.3em;
+  max-width: 16ch;
+}
+.hero p {
+  font-size: 1.32rem;
+  color: var(--ink-soft);
+  max-width: 46ch;
+}
+
+/* ---- Section headings with index dot ------------------------------------- */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 0 0 1.8rem;
+  font-family: "Fraunces", serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--ink-faint);
+}
+.section-label::before {
+  content: "";
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ---- Post list as nested bezel cards ------------------------------------- */
+.post-list { list-style: none; margin: 0; padding: 0; max-width: none; }
+.post-list li {
+  /* outer shell */
+  padding: 0.5rem;
+  margin-bottom: 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--ink) 7%, transparent);
+  background: color-mix(in srgb, var(--card) 55%, transparent);
+}
+.post-list a.post-card {
+  /* inner core */
+  display: block;
+  padding: 1.6rem 1.8rem;
+  border-radius: var(--radius-inner);
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 60%, transparent);
+  color: inherit;
+  transition: transform 0.5s var(--ease), box-shadow 0.5s var(--ease);
+}
+.post-list a.post-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow);
+}
+.post-card__title {
+  font-family: "Fraunces", serif;
+  font-size: 1.5rem;
+  font-weight: 560;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0.15rem 0 0.5rem;
+  color: var(--ink);
+}
+.post-card:hover .post-card__title { color: var(--accent); }
+.post-card__summary {
+  margin: 0.4rem 0 0;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  max-width: 60ch;
+}
+time, .meta {
+  display: inline-block;
+  font-family: "Fraunces", serif;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  color: var(--ink-faint);
+}
+
+/* ---- Generic content surfaces -------------------------------------------- */
+.page, .post { max-width: none; }
+.post > header { margin-bottom: 2.5rem; }
+.post > header .eyebrow { margin-bottom: 1.2rem; }
+.post > header h1 { margin: 0 0 0.6rem; }
+.summary {
+  font-size: 1.3rem;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  max-width: 50ch;
+  margin-top: 0.8rem;
+}
+
+/* article body width — keep prose to a comfortable measure */
+.post > *:not(header):not(.sources),
+.page > * { margin-left: auto; margin-right: auto; }
+
+/* Sources block — set off as a card */
+.sources {
+  margin-top: 3.5rem;
+  padding: 1.8rem 2rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--paper-tint);
+}
+.sources h2 { margin-top: 0; font-size: 1.25rem; }
+.sources ul { padding-left: 1.1rem; }
+.sources li { margin-bottom: 0.5rem; color: var(--ink-soft); }
+
+/* ---- Code ----------------------------------------------------------------- */
+code, pre {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+code {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+}
+pre {
+  overflow-x: auto;
+  padding: 1.25rem 1.4rem;
+  margin: 1.8em 0;
+  border-radius: var(--radius-inner);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  line-height: 1.6;
+}
+pre code { background: none; padding: 0; color: var(--ink); }
+
+/* ---- Footer --------------------------------------------------------------- */
+.site-footer {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--paper-tint) 70%, transparent);
+}
+.site-footer-inner {
+  width: var(--shell);
+  margin: 0 auto;
+  padding: 2.5rem 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.5rem;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.site-footer p { margin: 0; max-width: none; color: var(--ink-faint); font-size: 0.95rem; }
+.site-footer .footer-mark {
+  font-family: "Fraunces", serif;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--ink-faint);
+}
+
+/* ---- Floating Table of Contents (scrollspy) ------------------------------ */
+.toc {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  /* sit in the right margin, just outside the centered article column */
+  right: max(1.5rem, calc((100vw - var(--shell)) / 2 - 15rem));
+  width: 13.5rem;
+  max-height: 76vh;
+  overflow-y: auto;
+  z-index: 20;
+  font-family: "Fraunces", serif;
+  /* hidden until JS confirms there are enough headings + a wide-enough viewport */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s var(--ease);
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.toc::-webkit-scrollbar { display: none; }
+.toc.is-ready { opacity: 1; visibility: visible; }
+
+.toc__label {
+  font-size: 0.66rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  color: var(--ink-faint);
+  margin: 0 0 0.9rem 0.85rem;
+}
+.toc ul { list-style: none; margin: 0; padding: 0; max-width: none; }
+.toc li { margin: 0; }
+.toc a {
+  display: block;
+  padding: 0.28rem 0 0.28rem 0.85rem;
+  border-left: 2px solid var(--line);
+  font-size: 0.86rem;
+  line-height: 1.35;
+  color: var(--ink-faint);
+  background: none;
+  transition: color 0.3s var(--ease), border-color 0.3s var(--ease);
+}
+.toc a:hover { color: var(--ink-soft); border-color: var(--accent-soft); }
+.toc li.toc--sub a { padding-left: 1.7rem; font-size: 0.8rem; }
+.toc a.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 500;
+}
+
+/* Anchored headings shouldn't hide under the sticky nav when jumped to */
+.post h2[id], .post h3[id] { scroll-margin-top: 6rem; }
+
+@media (max-width: 1180px) {
+  .toc { display: none; }
+}
+
+/* ---- Motion: scroll reveal ----------------------------------------------- */
+/* Content is visible by default. The hidden/animated start state is opted into
+   only when JS is confirmed present (<html class="reveal-enabled">), so the page
+   degrades gracefully with JS disabled, blocked, or failed. */
+.reveal-enabled [data-reveal] {
+  opacity: 0;
+  transform: translateY(12px);
+  transition:
+    opacity 0.5s var(--ease),
+    transform 0.5s var(--ease);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: transform, opacity;
+}
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: none;
+  will-change: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+  .reveal-enabled [data-reveal] { opacity: 1; transform: none; filter: none; }
+}
+
+/* ---- Responsive ----------------------------------------------------------- */
+@media (max-width: 768px) {
+  :root { --shell: 92vw; }
+  body { font-size: 1.08rem; }
+  .container { padding: 3rem 0 4rem; }
+  .site-header__bar { gap: 0.6rem; padding-left: 1rem; }
+  .site-title { font-size: 1rem; }
+  nav a { padding: 0.4em 0.7em; font-size: 0.85rem; }
+  .post-list a.post-card { padding: 1.3rem 1.3rem; }
+  .hero p { font-size: 1.15rem; }
+}

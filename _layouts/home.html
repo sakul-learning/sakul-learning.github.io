@@ -2,22 +2,27 @@
 layout: default
 ---
 
-<section class="hero">
+<section class="hero" data-reveal>
+  <span class="eyebrow">Source-grounded notes</span>
   <h1>{{ site.title }}</h1>
   <p>{{ site.description }}</p>
 </section>
 
-{{ content }}
+<div class="home-intro" data-reveal>
+  {{ content }}
+</div>
 
-<section>
-  <h2>Published articles</h2>
+<section data-reveal>
+  <p class="section-label">Published articles</p>
   {% if site.posts.size > 0 %}
     <ul class="post-list">
       {% for post in site.posts %}
-        <li>
-          <a href="{{ post.url | relative_url }}">{{ post.title }}</a>
-          <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%Y-%m-%d" }}</time>
-          {% if post.summary %}<p>{{ post.summary }}</p>{% endif %}
+        <li data-reveal>
+          <a class="post-card" href="{{ post.url | relative_url }}">
+            <time datetime="{{ post.date | date_to_xmlschema }}">{{ post.date | date: "%B %-d, %Y" }}</time>
+            <h2 class="post-card__title">{{ post.title }}</h2>
+            {% if post.summary %}<p class="post-card__summary">{{ post.summary }}</p>{% endif %}
+          </a>
         </li>
       {% endfor %}
     </ul>
