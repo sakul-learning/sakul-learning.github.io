@@ -55,21 +55,30 @@
     label.textContent = "On this page";
     nav.appendChild(label);
 
-    var list = document.createElement("ul");
+    var rootList = document.createElement("ul");
     var linkFor = {};
+    var currentH2Li = null; // most recent top-level item, to nest h3s under
 
     headings.forEach(function (h) {
       var li = document.createElement("li");
-      if (h.tagName.toLowerCase() === "h3") li.className = "toc--sub";
       var a = document.createElement("a");
       a.href = "#" + h.id;
       a.textContent = h.textContent;
       li.appendChild(a);
-      list.appendChild(li);
       linkFor[h.id] = a;
+
+      if (h.tagName.toLowerCase() === "h3" && currentH2Li) {
+        // nest under the parent h2; create its sublist on first child
+        var sub = currentH2Li.querySelector(":scope > ul");
+        if (!sub) { sub = document.createElement("ul"); currentH2Li.appendChild(sub); }
+        sub.appendChild(li);
+      } else {
+        rootList.appendChild(li);
+        if (h.tagName.toLowerCase() === "h2") currentH2Li = li;
+      }
     });
 
-    nav.appendChild(list);
+    nav.appendChild(rootList);
     document.body.appendChild(nav);
     nav.classList.add("is-ready");
 
