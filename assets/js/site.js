@@ -3,6 +3,12 @@
 (function () {
   "use strict";
 
+  // Safety net: if anything below throws, drop the opt-in class so the CSS
+  // hidden state is removed and all content stays visible.
+  window.addEventListener("error", function () {
+    document.documentElement.classList.remove("reveal-enabled");
+  });
+
   var reduceMotion = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 

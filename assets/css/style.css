@@ -469,7 +469,10 @@ pre code { background: none; padding: 0; color: var(--ink); }
 }
 
 /* ---- Motion: scroll reveal ----------------------------------------------- */
-[data-reveal] {
+/* Content is visible by default. The hidden/animated start state is opted into
+   only when JS is confirmed present (<html class="reveal-enabled">), so the page
+   degrades gracefully with JS disabled, blocked, or failed. */
+.reveal-enabled [data-reveal] {
   opacity: 0;
   transform: translateY(12px);
   transition:
@@ -490,7 +493,7 @@ pre code { background: none; padding: 0; color: var(--ink); }
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
-  [data-reveal] { opacity: 1; transform: none; filter: none; }
+  .reveal-enabled [data-reveal] { opacity: 1; transform: none; filter: none; }
 }
 
 /* ---- Responsive ----------------------------------------------------------- */
