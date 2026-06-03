@@ -1,8 +1,8 @@
 ---
 layout: post
 title: Terraform Plugin Framework vs. formae's Plugin SDK
-summary: 'A source-grounded comparison of two infrastructure plugin systems: Terraform''s protocol-first provider framework
-  and formae''s actor-driven, Pkl-schema plugin SDK.'
+summary: A deep comparison of Terraform's protocol-first provider framework and formae's actor-driven plugin SDK, focusing
+  on boundaries, schemas, lifecycle, and developer experience.
 tags:
 - infrastructure-as-code
 - terraform
@@ -69,7 +69,13 @@ Terraform's boundary is protocol-first. The Terraform Plugin Protocol is a versi
 
 That protocol boundary matters because Terraform has an enormous provider ecosystem. Compatibility is not only a technical concern; it is a distribution model. Terraform Registry discovery, CLI compatibility, provider release versioning, and migration from SDKv2 all depend on the idea that a provider is a separately distributed executable speaking a known protocol.
 
-formae's boundary is agent-and-actor-first, and the copied article makes clear that this boundary was not the first attempt. The first iteration used Go's native `plugin` package and loaded `.so`/`.dylib` shared libraries in-process. That gave plugin authors the desired tiny interface, but it tied agent and plugin builds to the same Go version, package versions, build flags, and transitive dependency graph. The public documentation now says plugins run as separate processes or remote services and communicate with formae through documented public interfaces, not by being linked into formae. The repo's `pkg/plugin/README.md` adds the implementation detail: the external-plugin entry point calls `sdk.RunWithManifest`, which reads `formae-plugin.pkl`, extracts schemas from `schema/pkl/PklProject`, wraps the user's `ResourcePlugin`, starts an Ergo node, and announces capabilities to the agent. The `PluginActor` builds an announcement with supported resources, resource schemas, match filters, label config, namespace, version, and max request rate, then sends it to the agent's `PluginCoordinator`.
+formae's boundary is agent-and-actor-first, and the copied article makes clear why that boundary exists. The first implementation loaded Go native plugins in-process with the standard `plugin` package: compile a shared object, export a `Plugin` symbol, `plugin.Open` it, assert it implements `ResourcePlugin`, then call it directly. That was elegant inside a monorepo, but not viable for a public SDK. Go native plugins require host and plugin to match on Go toolchain, shared package versions, build flags, and transitive dependencies. For an infrastructure plugin ecosystem wrapping many cloud SDKs, that is dependency lockstep disguised as extensibility.
+
+So formae kept the tiny `ResourcePlugin` interface but moved the execution boundary. The public documentation now says plugins run as separate processes or remote services and communicate with formae through documented public interfaces, not by being linked into formae. The repo's `pkg/plugin/README.md` adds the implementation detail: the external-plugin entry point calls `sdk.RunWithManifest`, which reads `formae-plugin.pkl`, extracts schemas from `schema/pkl/PklProject`, wraps the user's `ResourcePlugin`, starts an Ergo node, and announces capabilities to the agent. The `PluginActor` builds an announcement with supported resources, resource schemas, match filters, label config, namespace, version, and max request rate, then sends it to the agent's `PluginCoordinator`.
+
+That history sharpens the Terraform comparison. Terraform and formae both end up with separately distributed binaries, but for different reasons. Terraform's separation is about an ecosystem-scale protocol contract between Core, providers, and the Registry. formae's separation is about preserving a small Go authoring surface while escaping Go shared-library lockstep, isolating plugin failures, decoupling licenses, and giving the agent freedom to place plugin actors locally or remotely.
+
+The Ergo primer in the second gist explains the last point. Ergo brings Erlang/OTP-style actors to Go: nodes host lightweight processes, actors communicate by sending messages to PIDs, and the caller does not need to care whether the recipient is on the same node, a separate plugin process, or a remote satellite. The formae article calls this network transparency. In tests, the `PluginOperator` can run locally on the agent's node. In the OSS agent, it can run as a local persistent plugin process. At larger scale, it can move behind satellite agents without changing the agent's mental model of "send a message to the operator."
 
 So Terraform treats the plugin boundary as a versioned RPC surface that Terraform Core controls. formae treats it as a process/actor boundary where the plugin announces capabilities and the agent orchestrates resource work.
 
@@ -78,26 +84,11 @@ That is the first architectural trade-off:
 | Dimension | Terraform Plugin Framework | formae Plugin SDK |
 | --- | --- | --- |
 | Primary boundary | Terraform Plugin Protocol v5/v6 | Agent/plugin actor process boundary |
+| Why it exists | Ecosystem compatibility between Terraform Core, providers, Registry releases, and HCL workflows | Escape Go native-plugin lockstep while preserving a tiny Go interface and supporting local/remote plugin topology |
 | Transport | gRPC/protobuf through terraform-plugin-go servers | Ergo actor messaging, serialized across process boundary |
 | Core lifecycle owner | Terraform Core plan/apply/refresh/import lifecycle | formae agent scheduler, queue, reconciliation, discovery |
 | Plugin role | Provider implementation for Terraform resources, data sources, functions, actions | Resource operation worker that announces capabilities and executes CRUD/discovery |
 | Distribution emphasis | Registry-compatible provider binaries | Separately licensed plugins with manifest, schema package, and agent discovery |
-
-## Why formae abandoned Go's native plugin package
-
-The copied Platform Engineering article adds an important history that the docs alone only imply. formae's first plugin implementation used Go's built-in `plugin` package. A provider implementation exported a `Plugin` symbol, the agent called `plugin.Open`, looked up that symbol, asserted it implemented `ResourcePlugin`, and then called methods directly in-process.
-
-That design was elegant for a monorepo prototype. It kept the developer surface tiny and avoided a new process per invocation. But Go native plugins have a harsh compatibility model: the host and plugin must be built with the exact same Go toolchain, and any package imported by both host and plugin must be at the exact same version and build flags. For an infrastructure plugin ecosystem, that becomes dependency hell. Different cloud SDKs pull different transitive dependencies; external plugin authors build on their own machines and release on their own schedules. Once the SDK became public, dynamic linking was the wrong boundary.
-
-This history sharpens the Terraform comparison. Terraform also uses separate provider binaries, but for different historical reasons: ecosystem distribution and a stable Terraform Core/plugin protocol. formae moved out-of-process because the agent wanted to preserve a tiny Go interface while escaping Go shared-library lockstep. Terraform's separation is protocol compatibility at ecosystem scale; formae's separation is dependency, licensing, and actor-topology independence.
-
-## Ergo and network transparency
-
-The second gist file, the Ergo primer, helps explain why the formae article treats actors as more than an implementation detail. It introduces the actor model as a message-passing concurrency paradigm where actors process messages, hold private state, create more actors, send messages to known addresses, and change behavior for future messages. Ergo brings Erlang/OTP-style actors to Go using lightweight processes implemented on goroutines, with nodes hosting actor runtimes and PIDs naming actor processes.
-
-formae uses that model to make plugin topology less special. The article says the formae agent already hosts an Ergo node and that plugin operations are orchestrated by a `PluginOperator`. The key move was to lift that operator into a separate OS process running its own Ergo node. Because Ergo interaction is message-based, the agent can send messages to a local process, a plugin process on the same machine, or a remote/satellite agent without changing the shape of the call. The article calls this network transparency.
-
-That means formae's actor choice is not merely "Go concurrency style." It is an architectural escape hatch: tests can spawn plugin operators locally without subprocess overhead, OSS deployments can run plugin processes locally, and larger deployments can move plugin processes behind satellite agents. Terraform's provider protocol also gives location-independent executable boundaries, but it is still organized around Terraform Core RPCs. formae's boundary is organized around actors in an agent topology.
 
 ## Interfaces: broad Terraform concepts vs. one resource plugin contract
 
@@ -124,9 +115,9 @@ type ResourcePlugin interface {
 
 The repo comments say plugin identity and schema methods are handled automatically by the SDK. The internal `FullResourcePlugin` adds `Name`, `Version`, `Namespace`, `SupportedResources`, and `SchemaForResourceType`, but plugin authors do not implement those directly. The SDK derives identity from the manifest and schemas from the Pkl package.
 
-That is a strong opinion: resource plugins should stay focused on remote-system operations. Schema declaration, metadata, wrapping, startup, and announcement are SDK responsibilities.
+That is a strong opinion: resource plugins should stay focused on remote-system operations. Schema declaration, metadata, wrapping, startup, and announcement are SDK responsibilities. The formae article also gives a pragmatic reason for keeping the surface this small: AI coding agents write much of the plugin code, so reliability comes from a narrow contract, LLM-oriented documentation, and conformance tests that turn "did it get it right?" into a runnable answer.
 
-Terraform asks provider authors to model Terraform semantics directly. formae asks plugin authors to implement infrastructure operations and lets the agent/SDK attach those operations to the platform model.
+Terraform asks provider authors to model Terraform semantics directly. formae asks plugin authors to implement infrastructure operations and lets the agent/SDK attach those operations to the platform model. That makes Terraform's framework more expressive for Terraform-native behavior, while formae's SDK is easier to generate, test, and supervise as a platform operation worker.
 
 ## Schema: Go framework types vs. Pkl as the declarative source of truth
 
@@ -150,7 +141,7 @@ A Terraform resource schema has a `Version`. The `ResourceWithUpgradeState` inte
 
 That is a powerful but demanding model. Terraform gives provider authors tools to precisely control state compatibility, but provider authors must think in Terraform state terms.
 
-formae's schema evolution story appears more centralized. The article's title foregrounds schema evolution, and the repo shows mechanisms that make this plausible: schemas are Pkl packages, the SDK extracts descriptors at startup, the manifest declares `minFormaeVersion`, and the extractor rewrites plugin dependencies against the agent's formae schema. The docs also emphasize `FieldHint` semantics like `createOnly`, identifier extraction, discoverability, extractability, and parent-child resource relationships. These are schema-level concepts the agent can reason about before or around plugin calls.
+formae's schema evolution story appears more centralized. The article's title foregrounds schema evolution, and the repo shows the mechanism behind that framing: schemas are Pkl packages, the SDK extracts descriptors at startup, the manifest declares `minFormaeVersion`, and the extractor rewrites plugin dependencies against the agent's formae schema. The docs also emphasize `FieldHint` semantics like `createOnly`, identifier extraction, discoverability, extractability, and parent-child resource relationships. These are schema-level concepts the agent can reason about before or around plugin calls, instead of asking each plugin method to rediscover the platform contract.
 
 The trade-off is maturity vs. centralization. Terraform has years of battle-tested state migration machinery exposed through framework interfaces. formae can make schema evolution feel more like updating a declarative package interpreted by the agent, but that also means its evolution guarantees depend on how consistently the agent, Pkl schema library, descriptor extraction, and plugins are versioned together.
 
@@ -160,7 +151,7 @@ Terraform is famous for planning. Its plugin framework is built around Terraform
 
 In other words, Terraform's provider framework gives plugins a seat at the planning table, but Terraform Core owns the table.
 
-formae, by contrast, appears to center the agent's reconciliation loop. The article summary says the formae agent schedules, queues, and reconciles work. The plugin docs say the agent discovers installed plugins, spawns them, routes operations, and enforces rate limits. The conformance test suite validates create, read, update, replace, destroy, extract, discover, forced sync, and out-of-band deletion. That is not just CRUD testing; it is lifecycle testing through the agent and CLI.
+formae, by contrast, centers the agent's reconciliation loop. The copied article says the formae agent knows how to schedule, queue, order, rate-limit, execute, and retry plugin operations; the resource plugin owns the actual API interaction. The plugin docs say the agent discovers installed plugins, spawns them, receives capabilities, routes operations, and enforces rate limits. The conformance test suite validates create, read, update, replace, destroy, extract, discover, forced sync, and out-of-band deletion. That is not just CRUD testing; it is lifecycle testing through the agent and CLI.
 
 This is an important distinction for platform teams:
 
@@ -179,7 +170,7 @@ formae bakes async progress into the public plugin interface. CRUD results embed
 
 This is one of formae's clearest advantages for cloud-provider ergonomics. Many real infrastructure APIs are not synchronous: create starts a job, update triggers stabilization, delete returns before eventual removal, discovery is paginated, and rate limits vary by namespace or service. If the platform's agent owns polling, rate limits, and retries, plugin code can be thinner and more consistent.
 
-Terraform can model the same behavior, but the provider often owns more of the operational loop. formae pushes more of that loop into the platform.
+Terraform can model the same behavior, but the provider often owns more of the operational loop. formae pushes more of that loop into the platform: scheduling, ordering, rate limiting, retry classification, and status polling become agent concerns rather than ad hoc code inside every plugin.
 
 ## Discovery and inventory
 
@@ -195,6 +186,8 @@ Terraform's framework ecosystem emphasizes unit tests, acceptance tests, migrati
 
 formae's conformance tests are more platform-integrated. The plugin scaffold wires in tests that run through the real formae CLI and agent. The suite validates not only CRUD but extract, discover, forced sync idempotency, replacement behavior, destroy, and out-of-band deletion. That is a different testing posture: not "does this provider method behave?" but "does this plugin behave correctly inside the platform's lifecycle?"
 
+This also connects back to the article's AI-agent point. If coding agents generate most plugin code, tests need to be more than examples for humans; they need to be executable feedback loops. Terraform's framework relies on provider authors understanding Terraform semantics and building the right test matrix. formae tries to move more of that burden into a standard conformance harness that generated plugins can run against repeatedly.
+
 For a young ecosystem, that is a smart move. A conformance suite can encode platform expectations before dozens of plugins drift into subtly incompatible interpretations of CRUD, discovery, replacement, or progress.
 
 ## Licensing and ecosystem implications
@@ -203,13 +196,13 @@ Terraform's Plugin Framework repository is MPL-2.0 and belongs to a large ecosys
 
 formae's docs explicitly state a plugin policy: plugins are independent works, executed out-of-process or as remote services, communicating only through documented public interfaces; plugin developers may choose open-source or proprietary licenses; plugin licenses should not impose terms on formae components. The repo files are marked FSL-1.1-ALv2.
 
-This is not a side issue. Plugin architecture is often license architecture. Both systems use out-of-process plugins, but formae's policy is unusually explicit about non-derivative boundaries and plugin licensing independence. Terraform's mature ecosystem has already normalized separately distributed providers; formae is documenting that boundary early.
+This is not a side issue. Plugin architecture is often license architecture. Both systems use out-of-process plugins, but formae's policy is unusually explicit about non-derivative boundaries and plugin licensing independence. The move away from Go native plugins therefore solved two problems at once: dependency lockstep and license coupling. Terraform's mature ecosystem has already normalized separately distributed providers; formae is documenting that boundary early because its first implementation made the cost of in-process linking concrete.
 
 ## Developer experience: who is the plugin author?
 
 Terraform's framework is best for developers who need to expose a system to Terraform practitioners. They must understand Terraform configuration, planning, state, unknown values, import, schema migrations, and acceptance testing. The reward is access to Terraform's ecosystem and a highly recognizable workflow.
 
-formae's SDK seems designed for platform engineers who need to add a resource type to an agent-driven infrastructure platform. They implement operations against a target API, describe resources in Pkl, and rely on the SDK/agent for startup, schema extraction, registration, rate limiting, progress polling, discovery, and conformance testing.
+formae's SDK seems designed for platform engineers who need to add a resource type to an agent-driven infrastructure platform. They implement operations against a target API, describe resources in Pkl, and rely on the SDK/agent for startup, schema extraction, registration, rate limiting, progress polling, discovery, conformance testing, and actor placement. Whether the operator runs locally in a workflow test, as a persistent plugin process, or behind a satellite agent is meant to be a deployment detail rather than a different plugin authoring model.
 
 That makes formae potentially easier for internal platform teams, especially when the target system is not a traditional Terraform provider candidate. But it also means a formae plugin is useful inside formae's operational model, not as a general-purpose Terraform provider. Terraform has broader ecosystem reach. formae can be more opinionated because it does not need to support every Terraform use case.
 
@@ -231,10 +224,11 @@ formae's Plugin SDK is stronger when agent-managed operations, discovery, and sc
 
 1. **Async operation model.** `Status` and `ProgressResult` make long-running cloud workflows first-class.
 2. **Discovery by design.** `List`, discovery filters, discoverable schemas, unmanaged inventory, and conformance tests treat discovery as core behavior.
-3. **Agent-owned orchestration.** Scheduling, queuing, rate limits, plugin announcements, actor supervision, and retries sit in the platform rather than in every plugin.
-4. **Pkl schema packages.** Resource schemas can be evaluated, extracted, verified, version-resolved, and used by the agent outside plugin method calls.
-5. **Conformance as scaffold.** New plugins start with a lifecycle test suite that exercises real agent behavior.
-6. **License boundary clarity.** The docs explicitly frame plugins as independent out-of-process works.
+3. **Agent-owned orchestration.** Scheduling, queuing, ordering, rate limits, plugin announcements, actor supervision, and retries sit in the platform rather than in every plugin.
+4. **Topology flexibility.** Ergo network transparency lets the same operator model run in-process for tests, out-of-process locally, or remotely behind satellite agents.
+5. **Pkl schema packages.** Resource schemas can be evaluated, extracted, verified, version-resolved, and used by the agent outside plugin method calls.
+6. **Conformance as scaffold.** New plugins start with a lifecycle test suite that exercises real agent behavior, which is especially useful when AI agents generate much of the plugin code.
+7. **License and dependency boundary clarity.** The docs explicitly frame plugins as independent out-of-process works, and the architecture avoids native Go plugin dependency lockstep.
 
 If the question is, "How do I add a new resource family to an agent that manages inventory, discovery, async operations, and reconciliation?" formae's SDK is the more targeted design.
 
@@ -277,6 +271,6 @@ The exciting possibility is not that formae replaces Terraform or that Terraform
 
 Terraform's Plugin Framework is one of the best examples of the first category. formae's Plugin SDK is an early, concrete example of the second.
 
-The article on formae's plugin SDK is worth reading through that lens. Its references to Go plugins, actors, and schema evolution are not implementation trivia. The Go plugin history explains why the process boundary exists; the Ergo primer explains why that boundary can be actor-shaped rather than just RPC-shaped; the Pkl schema machinery explains how the agent can keep reasoning about resource types outside the plugin's Go code. Together they point to a different center of gravity: an infrastructure platform where plugins are supervised workers in an agent's resource graph, not only RPC endpoints for a plan/apply engine.
+That is why the formae articles matter to this comparison. The Go plugin history explains why the process boundary exists; the Ergo primer explains why that boundary can be actor-shaped rather than just RPC-shaped; the Pkl schema machinery explains how the agent can keep reasoning about resource types outside the plugin's Go code. Together they point to a different center of gravity: an infrastructure platform where plugins are supervised workers in an agent's resource graph, not only RPC endpoints for a plan/apply engine.
 
 That difference is exactly why the comparison is useful.

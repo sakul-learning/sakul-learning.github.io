@@ -277,6 +277,10 @@ Key points:
 
 Interpretation: formae bakes platform lifecycle behavior into plugin conformance.
 
+## Revision notes
+
+- After review, removed standalone "formae article" sections from the draft and integrated their points into the comparison: plugin boundary/history, interface size/AI-agent generation, agent-owned orchestration, conformance testing, licensing/dependency boundaries, and deployment topology.
+
 ## Comparison thesis
 
 Terraform Plugin Framework is protocol-centered:
