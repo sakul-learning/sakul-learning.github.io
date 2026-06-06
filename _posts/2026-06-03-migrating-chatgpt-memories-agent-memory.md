@@ -205,19 +205,186 @@ Sort each item by how it will be *used*:
 
 The target is a memory system that is **transparent** (you can see what the agent believes), **scoped** (project memories don't bleed across work), **action-aware** (approvals and risky instructions carry boundaries), and **self-cleaning**. Migrating memories isn't a one-time copy-paste; it's the start of a memory operating system you own.
 
-## Side note: handing a single ChatGPT conversation to your agent
+## Side note: sharing a single ChatGPT conversation with your agent
 
-Sometimes you don't want your whole profile — just one useful conversation as source material. Public ChatGPT **share links** are ideal because they can be fetched without giving the agent your account. A small procedural skill makes the handoff one line: *"fetch this ChatGPT share into `/data`: https://chatgpt.com/share/…"*. The agent downloads it as Markdown/HTML with a tool like [`csctf`](https://github.com/Dicklesworthstone/chat_shared_conversation_to_file), spot-checks it, and reports the paths.
+The memory-export prompt above is for durable profile context. Sometimes you want a smaller move: take one useful ChatGPT conversation and hand it to your local agent as source material. Public ChatGPT share links are good for this because they can be fetched without giving the agent your ChatGPT account.
+
+A practical setup is to install a public-share exporter such as `csctf` (`chat_shared_conversation_to_file`) and give Hermes a small procedural skill for it. Then the handoff becomes simple:
+
+> fetch this ChatGPT share into `/data`: `https://chatgpt.com/share/...`
+
+The agent should download the share as Markdown and HTML, put it in a data mount or other agreed source folder, spot-check the result, and report the paths. That turns a one-off conversation into inspectable source material that can be summarized, linked from source notes, or promoted into a real Hermes skill later.
+
+Here is the reusable Hermes skill, with machine-specific installation paths removed:
+
+````markdown
+---
+name: chatgpt-share-export
+description: Use when the user asks to fetch, download, export, or archive a public ChatGPT shared conversation URL into a data directory using csctf.
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+metadata:
+  hermes:
+    tags: [chatgpt, export, shared-conversations, csctf, markdown, archive]
+    related_skills: [hermes-agent]
+---
+
+# ChatGPT Share Export
+
+## Overview
+
+Use this skill to turn a public ChatGPT share URL such as `https://chatgpt.com/share/...` or `https://chat.openai.com/share/...` into local Markdown and HTML files under an agreed data or source-material directory.
+
+The preferred tool is `csctf`, installed as a local CLI from `chat_shared_conversation_to_file`. Use a system Chromium or browser available on the host if Playwright's bundled Chromium cannot be installed for the platform.
+
+## When to Use
+
+Use when the user says things like:
+
+- "fetch this ChatGPT share into `/data`"
+- "download this ChatGPT shared conversation"
+- "export this share URL as markdown/html"
+- "archive this ChatGPT conversation"
+- "run csctf on this ChatGPT share link"
+
+Also applicable to csctf-supported public AI share links from Claude, Gemini, and Grok, but the primary expected trigger is ChatGPT share URLs.
+
+Do not use this for private ChatGPT conversations that are not public share URLs. csctf fetches public share pages; it is not an authenticated ChatGPT account exporter.
+
+## Default Output Location
+
+Use the user's requested data directory by default, commonly:
 
 ```bash
-# install (Bun); review any installer before piping remote code to a shell
-export BUN_INSTALL="$HOME/.bun"; export PATH="$BUN_INSTALL/bin:$PATH"
-command -v bun >/dev/null || { curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh && bash /tmp/bun-install.sh; }
-git clone https://github.com/Dicklesworthstone/chat_shared_conversation_to_file "$HOME/csctf" && cd "$HOME/csctf"
-PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 bun install && bun run build
-
-# fetch a share into a stable path
-csctf 'https://chatgpt.com/share/<id>' --timeout-ms 90000 --outfile /data/chatgpt-shares/chatgpt-share-<id>
+/data/chatgpt-shares
 ```
 
-Two cautions: it only works on **public** share URLs (private history needs the official export above), and **a transcript is evidence, not memory** — the agent still has to decide whether it contains a durable preference, a project note, a reusable procedure, a temporary task, or nothing worth promoting. Which is the whole point: the value isn't copying everything across. It's owning a system disciplined enough to keep only what makes the agent better.
+For a URL with ID `<share-id>`, use this base filename pattern:
+
+```text
+<data-dir>/chatgpt-shares/chatgpt-share-<share-id>
+```
+
+Expected outputs:
+
+```text
+<data-dir>/chatgpt-shares/chatgpt-share-<share-id>.md
+<data-dir>/chatgpt-shares/chatgpt-share-<share-id>.html
+```
+
+If the user asks for a different directory or filename, respect that.
+
+## Quick Recipe
+
+1. Extract the share ID from the URL.
+2. Ensure the output directory exists.
+3. Run csctf with an explicit `--outfile` base path.
+4. Spot-check the generated Markdown and HTML.
+5. Report the absolute paths and basic verification results.
+
+Command template:
+
+```bash
+set -euo pipefail
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+URL='https://chatgpt.com/share/<share-id>'
+ID='<share-id>'
+OUTDIR='<data-dir>/chatgpt-shares'
+BASE="$OUTDIR/chatgpt-share-$ID"
+
+mkdir -p "$OUTDIR"
+csctf "$URL" --timeout-ms 90000 --outfile "$BASE"
+```
+
+If `csctf` is not on `PATH`, use the local binary path configured on that machine.
+
+## Verification / Spot Check
+
+After running, verify both files exist and are non-empty:
+
+```bash
+MD="$BASE.md"
+HTML="$BASE.html"
+stat -c '%n %s bytes' "$MD" "$HTML"
+wc -l -w -c "$MD" "$HTML"
+```
+
+Then inspect the beginning of the Markdown for title, source URL, retrieval timestamp, and role sections:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+p = Path('<data-dir>/chatgpt-shares/chatgpt-share-<share-id>.md')
+text = p.read_text(errors='replace')
+for line in text.splitlines()[:80]:
+    if line.strip():
+        print(line[:220])
+PY
+```
+
+Also confirm the HTML title/content references the same conversation:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+p = Path('<data-dir>/chatgpt-shares/chatgpt-share-<share-id>.html')
+text = p.read_text(errors='replace')
+for needle in ['<title>', 'ChatGPT Conversation', 'Source:']:
+    print(needle, needle in text)
+PY
+```
+
+If the user asks for a deeper check, read targeted portions of the Markdown with `read_file`, or search for expected phrases using `search_files`.
+
+If Playwright's browser download is unsupported on the host, configure csctf to use an available system Chrome/Chromium installation.
+
+## Common Pitfalls
+
+1. **Playwright Chromium install can fail on some Linux/ARM combinations.** Use `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 bun install` and rely on a system Chrome/Chromium where needed.
+
+2. **Forgetting explicit `--outfile`.** Without it, csctf writes to the current directory with an inferred filename. Use an explicit base path under the data/source directory so the user gets a stable, easy-to-find artifact.
+
+3. **Stopping after the CLI says success.** Always spot-check file sizes, line counts, and the first Markdown content before reporting success.
+
+4. **Assuming this works for private conversations.** It only works on public share URLs; private account history needs a different export path.
+
+5. **Treating the export as memory immediately.** A conversation transcript is source material. Summaries, preferences, and procedures still need classification before promotion into memory or skills.
+
+## Reporting Format
+
+When done, tell the user:
+
+- Markdown path
+- HTML path
+- file sizes / line counts
+- detected title
+- brief spot-check result
+
+Example:
+
+```text
+Exported and spot-checked:
+
+- <data-dir>/chatgpt-shares/chatgpt-share-<id>.md
+- <data-dir>/chatgpt-shares/chatgpt-share-<id>.html
+
+Title detected: <title>
+Markdown: <bytes> bytes, <lines> lines
+HTML: <bytes> bytes, <lines> lines
+```
+
+## Verification Checklist
+
+- [ ] URL is a public share URL.
+- [ ] Output directory exists under the requested data/source directory.
+- [ ] csctf completed with exit code 0.
+- [ ] Markdown and HTML files exist and are non-empty.
+- [ ] Markdown contains title, source URL, and role sections.
+- [ ] HTML contains the expected title or conversation heading.
+- [ ] Final response includes absolute paths.
+````
+
+That last pitfall is the important memory-system point: sharing a ChatGPT conversation with an agent is not the same as making it memory. The export is evidence. The agent still has to decide whether the conversation contains a durable user preference, a project note, a reusable procedure, a temporary task, or nothing worth promoting.
