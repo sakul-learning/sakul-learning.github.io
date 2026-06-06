@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Giving a Personal Agent a Memory That Holds Up"
-summary: "Practical notes from setting up long-term memory for a self-hosted personal agent: where the built-in file memory breaks, what we learned trying local and cloud memory backends, why DeepSeek can't embed, and how a task board turned out to matter as much as the memory store."
+title: "Migrating Out of ChatGPT: Memory You Own, on an Agent That Runs Your Code"
+summary: "Why and how to move off subscription memory toward something you own and run yourself. First what to migrate into — how Hermes agent memory actually works and the pitfalls we hit (including the auxiliary-LLM layer) — then, as an appendix, the practical pipeline for migrating your ChatGPT memories in."
 tags:
   - ai-agents
   - memory
@@ -9,69 +9,153 @@ tags:
   - personal-agent
   - hindsight
   - kanban
+  - chatgpt
+  - migration
 ---
 
-Most writing about agent memory starts with importing your ChatGPT history. That's the easy part. The hard part is the system you import *into*: what your long-running personal agent should remember every turn, what it should be able to search, what should expire, and where all of that actually lives on a small box you pay for yourself.
+If you pay for ChatGPT or Claude, your "memory" lives on someone else's servers, governed by someone else's product decisions, and bound to one assistant. This post is about migrating *out* of that — toward memory you own, on an agent you run yourself.
 
-This is a field report from doing exactly that on a self-hosted [Hermes](https://hermes-agent.nousresearch.com/) agent running on a modest cloud VM — an 8 GB ARM instance with no GPU, already running other services. The constraints turned out to drive every decision, so I'll be concrete about them.
+The reason it's worth the effort isn't just data ownership. It's that a self-hosted agent can do things a subscription assistant won't. The agent this is written for — a self-hosted [Hermes](https://hermes-agent.nousresearch.com/) — doesn't just *read* a pull request and opine. It checks out the branch, installs dependencies, **runs the tests, and exercises real scenarios** before it comments. That's well beyond what a read-only "sandbox" memory provider is willing to give you.
 
-## Where you start: built-in file memory, and where it breaks
+> **Security disclaimer.** Running untrusted code from PR branches is powerful and dangerous. Doing it safely needs strict mechanisms — **allowlists for trusted authors**, scrubbing of untrusted inputs, and tight action boundaries — so a hostile PR can't turn your agent into a foothold. We'll cover that hardening in a future article. Until then: only point this kind of automation at repositories and authors you control.
 
-Hermes (like OpenClaw and Claude's project memory) ships a built-in memory that is just plain Markdown the agent reads and writes: a `MEMORY.md` of durable facts and a `USER.md` profile. The appeal is real — it's transparent, inspectable, version-controllable, and the model only "remembers" what's literally on disk. For a while this is enough.
+But before you migrate anything *in*, you need to know what you're migrating *into*. So we'll first establish how Hermes' memory actually works and the pitfalls we hit standing it up — then, in the appendix, the practical pipeline for bringing your ChatGPT memories across.
 
-Then you hit the edges, and they're worth naming because they're what justify everything that follows:
+## How Hermes agent memory actually works
 
-- **The hard size cap.** Built-in memory has a character limit (ours was 2,200). One day the agent quietly started *refusing to store new memories* — `Memory at 2,113/2,200 chars; adding this entry would exceed the limit`. It didn't fail loudly; it just stopped learning. Raising the cap buys time, but a flat file that only grows is not a long-term memory.
-- **Entropy.** A single growing file accumulates duplicates, stale corrections, and contradictions. Without curation it becomes memory debt rather than memory.
-- **No semantic recall.** The agent "remembers" only what it wrote verbatim and can grep for. Ask it something phrased differently from how the fact was stored and it misses. There's no notion of *related* memories, consolidation, or "what do I believe about X, and why."
+Hermes (like OpenClaw and Claude's project memory) starts with a built-in memory that is just plain Markdown the agent reads and writes: a `MEMORY.md` of durable facts and a `USER.md` profile. The appeal is real — transparent, inspectable, version-controllable; the model only "remembers" what's literally on disk.
 
-So the built-in layer is a great **source of truth** — but you want a second, semantic layer on top for real recall. Keep the files; add a backend. That framing — built-in files as the inspectable ground truth, an external provider for semantic recall and synthesis — is the architecture worth aiming for. The interesting question is *which backend*, and here the small-box constraints bite hard.
+On top of that, Hermes supports a pluggable **external memory provider** for semantic recall — and crucially, a layered model: the built-in files stay the **inspectable source of truth**, while the provider adds embedding search and synthesis. The built-in layer is always on; the external one is optional and swappable.
 
-## Picking a backend: what actually happened
+That sounds clean. Standing it up taught us where the sharp edges are.
 
-Hermes supports a list of pluggable external memory providers (honcho, mem0, hindsight, holographic, ladybug, and more). On paper several looked perfect. In practice:
+## The pitfalls (what we actually hit)
 
-**"Local embedded" backends can quietly try to reshape your runtime.** Hindsight has a tempting local-embedded mode: an on-instance daemon with built-in Postgres that auto-stops when idle, local embeddings, and your own LLM key for extraction. Lovely on paper. But a dry-run of the install told a different story: the local stack resolved to **159 packages including the full CUDA toolkit** — useless on a GPU-less ARM box — and it wanted to **downgrade `cryptography` inside the agent's own virtualenv**. Installing it would have bloated a near-full disk and mutated the runtime the agent depends on. Lesson: before adopting any memory backend, `--dry-run` the install and read what it touches. A memory layer should never get to downgrade your agent's dependencies.
+### 1. The built-in file memory has a silent ceiling
 
-**"Just run mem0 locally" is not a flag you flip.** mem0 is the obvious open-source choice, and Hermes ships a mem0 plugin — but the stock plugin is **Mem0-Cloud only**: it instantiates the hosted `MemoryClient` and needs a Mem0 API key. Self-hosted/OSS mode (point it at a local embedder + your own vector store) is an *open, unmerged feature request*, not shipped. So "local mem0" means writing a custom provider, not selecting one. Good to know before you plan around it.
+Built-in memory has a character cap (ours was 2,200). One day the agent quietly started **refusing to store new memories** — `Memory at 2,113/2,200 chars; adding this entry would exceed the limit`. It didn't fail loudly; it just stopped learning. Two more failure modes follow from a flat growing file: **entropy** (duplicates, stale corrections, contradictions accumulate into "memory debt") and **no semantic recall** (the agent only finds what it wrote verbatim and can grep for; rephrase the question and it misses). The file layer is a great source of truth — but you want a semantic layer on top.
 
-**A cheap LLM key is not an embeddings key.** We wanted to run everything through one inexpensive DeepSeek key. Worth knowing: **DeepSeek's API has no embeddings endpoint** — it's chat-completions only. Any vector-search backend (mem0, Hindsight local, etc.) still needs a separate embedding model. The clean answer is a small *local* embedder (e.g. `bge-small`, 384-dim, ~100 MB, no key), but that's another resident process on a box where RAM is the binding constraint.
+### 2. "Local embedded" backends can try to reshape your runtime
 
-**Ladybug — genuinely interesting, but early.** One community plugin, Ladybug, backs its memory with an embedded graph database (a fork of Kuzu) and gives memories a *typed, linked* model — preferences, facts, projects, people, events — with importance scores and named edges. That data model is more expressive than a flat vector store, and it needs no API key. But it's **young**: a couple of months old, a handful of commits, effectively a single maintainer, and it loads its stack (graph DB, ONNX embeddings, more) **in-process and resident** — no idle release on a box that's already swapping. It's a project to *watch and experiment with*, not yet one to depend on for a daily driver.
+Hindsight has a tempting local-embedded mode: an on-instance daemon with built-in Postgres that auto-stops when idle, local embeddings, your own LLM key for extraction. Lovely on paper. But a dry-run of the install told a different story — the local stack resolved to **159 packages including the full CUDA toolkit** (useless on a GPU-less ARM box) and wanted to **downgrade `cryptography` inside the agent's own virtualenv**. Lesson: `--dry-run` any backend install and read what it touches. A memory layer should never get to mutate your agent's dependencies.
 
-**Holographic — the zero-dependency escape hatch.** If privacy and footprint dominate, Hermes' `holographic` provider is pure-Python Holographic Reduced Representations over SQLite: no LLM, no embeddings, no network, no keys. Tiny and fully local. The trade-off is that recall is *algebraic*, not semantic — closer to clever keyword/structure matching than to embedding search.
+### 3. "Just run mem0 locally" is not a flag you flip
 
-## The pragmatic answer for a small box: go cloud (carefully)
+mem0 is the obvious open-source choice, and Hermes ships a mem0 plugin — but the stock plugin is **Mem0-Cloud only**: it instantiates the hosted client and needs a Mem0 API key. Self-hosted/OSS mode is an *open, unmerged feature request*, not shipped. "Local mem0" means writing a custom provider, not selecting one.
 
-Stack all those constraints together — 8 GB, no GPU, disk pressure, one cheap LLM key — and the honest conclusion is that for *this* box, a **cloud** memory service is the better engineering choice. It sidesteps the CUDA/venv/embedder mess entirely; the agent keeps only a light HTTP client.
+### 4. A cheap LLM key is not an embeddings key
 
-Between the two cloud options we had keys for:
+We wanted everything on one inexpensive DeepSeek key. Worth knowing: **DeepSeek's API has no embeddings endpoint** — chat completions only. Any vector backend still needs a separate embedding model. The clean answer is a small *local* embedder (`bge-small`, 384-dim, ~100 MB, no key) — but that's another resident process on a RAM-tight box.
 
-- **mem0 Cloud (free Hobby tier)** is genuinely free, but the binding limit is **~1,000 retrievals per month**. An always-on agent that recalls roughly once per turn, across multiple threads and scheduled jobs, burns through that in *days*. Free, but not for an always-on agent.
-- **Hindsight Cloud** is usage-based with **no request wall** — you pay per token, and the levers that controlled *RAM* locally now control *cost*: retain less often, use a leaner recall budget, and the bill drops. Recall is cheap; the "retain" (write) path is the cost driver, so tuning how often you retain matters most.
+### 5. Mind the auxiliary-LLM layer — it's where memory quietly breaks
 
-We went with Hindsight Cloud, with retain throttled and a mid recall budget, keeping the built-in `MEMORY.md` as the always-on source of truth underneath. The one caveat to take seriously: **cloud means your memory leaves the box**, so only pick a provider with a real export path. (Both mem0 and Hindsight offer `get_all`/export, so you can migrate or repatriate later — which makes starting on cloud a low-regret move rather than a lock-in.)
+This is the pitfall most people miss. Your agent doesn't make one LLM call per turn; it makes **many**, most of them not to your main model:
 
-## The surprise lever: a task board is working memory too
+- **Context compression** summarizes long conversations.
+- **Title generation, triage, profile description, kanban decomposition** each call a model.
+- **Memory itself is auxiliary-LLM activity:** extracting facts to *retain*, and reasoning over a *recall* — whether built-in or a cloud provider — are model calls separate from the main turn.
 
-The most useful thing we learned wasn't about the memory store at all.
+Two things bit us here. First, these auxiliaries were defaulting to providers we had **no credit or auth** for, so they failed — and compression was configured to **fail *open***, meaning when the summarizer errored it proceeded *without* a summary and **silently dropped context the agent needed**. Memory loss that looks like the model "forgetting," but is really a broken auxiliary. We repointed every auxiliary (compression, titles, extraction, etc.) to a single funded, cheap model (`deepseek-v4-flash`).
 
-Symptom: during a burst of parallel work — several Discord threads open at once, driving a multi-step implementation — the agent kept "forgetting" a task it had been asked to do. It had to be reminded repeatedly, then lost it entirely after a context compression.
+Second, in **cloud** memory the retain/recall calls are *metered*. So the same levers that control RAM locally now control your bill: retain less often, use a leaner recall budget. Treat the auxiliary layer as a first-class part of your memory design — configure it, fund it, and pick a cheap model for it on purpose.
 
-Two facts explain it. First, **each Discord thread is its own isolated agent session** — parallel threads don't share live context; they only share what's been flushed to the global memory files. Second, when a session's context gets long, Hermes **compresses** the middle of the conversation into a summary; an in-flight instruction that isn't a "durable fact" can simply be summarized away.
+### 6. For a small box, cloud memory is a reasonable default — with an escape hatch
 
-The fix isn't more memory tokens. It's a **shared task board**. Hermes has a SQLite-backed `kanban` that's durable across every session, thread, and scheduled job. A task created in one thread is visible to the agent in another, and — unlike chat context — it *survives compression*. So durable action items belong on the board, not in the conversation.
+Stack the constraints together — 8 GB, no GPU, disk pressure, one cheap LLM key — and a **cloud** memory service is the better engineering choice for *this* box. The agent keeps only a light HTTP client. Between the two we had keys for: **mem0 Cloud (free Hobby)** caps at ~**1,000 retrievals/month**, which an always-on agent burns through in days; **Hindsight Cloud** is usage-based with **no request wall**, and you tune cost via retain/recall frequency. We chose Hindsight Cloud, keeping built-in `MEMORY.md` as the always-on source of truth. The one rule: only pick a provider with a real **export** path, so cloud stays a low-regret choice rather than lock-in — which, conveniently, is also what makes the migration in the appendix possible in reverse.
 
-We started putting this to work by wiring our PR-reviewer to record its work as kanban tasks: the script deterministically creates one task per pull request (idempotent, so re-reviews append rather than duplicate), the agent only *comments* progress on it ("ran the tests, posted the review, here's the link"), and the script owns closing or blocking the task — so a mid-review compression can never orphan it. The board becomes a human-visible audit trail *and* a piece of cross-session working memory. It's an area we want to explore much further: treating the task board as first-class memory for multi-step and parallel work, alongside the semantic store.
+### 7. A task board is working memory, too
+
+The most useful thing we learned wasn't about the store. During parallel work — several Discord threads open at once — the agent kept "forgetting" a task, then lost it entirely after a compression. Two facts explain it: **each Discord thread is its own isolated session** (they don't share live context), and compression can summarize an in-flight instruction away. The fix isn't more memory tokens — it's a **shared task board**. Hermes' SQLite-backed `kanban` is durable across every session, thread, and scheduled job, and survives compression. We wired our PR-reviewer to record its work there: the script deterministically creates one task per pull request (idempotent, so re-reviews append rather than duplicate), the agent only *comments* progress, and the script owns closing or blocking it — so a mid-review compression can never orphan it. It's a direction worth exploring much further: the task board as first-class working memory for multi-step, parallel work.
 
 ## Takeaways
 
-If you're giving a personal agent a memory:
+- Keep the built-in Markdown files as the inspectable source of truth; add a backend for semantic recall. Watch the size cap — it fails silently.
+- `--dry-run` any backend install. On a small/ARM/no-GPU box, "local embedded" can mean CUDA and a runtime-mutating dependency set.
+- A cheap LLM key ≠ embeddings.
+- **Configure and fund the auxiliary-LLM layer deliberately** — compression and memory extraction are where context quietly disappears.
+- For constrained boxes, cloud memory is fine *if* it has an export path.
+- Don't put durable, multi-step work in the chat; a shared task board is the cross-session working memory that holds up.
 
-- **Keep the built-in Markdown files** as the inspectable source of truth; add a backend for semantic recall rather than replacing them. Watch the size cap — it can fail silently.
-- **Dry-run any backend install** and read what it pulls in. On a small/ARM/no-GPU box, "local embedded" can mean CUDA and a runtime-mutating dependency set.
-- **A cheap LLM key ≠ embeddings.** Plan a local embedder, or let a cloud backend handle it.
-- **For constrained boxes, cloud memory is a reasonable default** — but only with an export path so it stays a low-regret choice.
-- **Don't put durable, multi-step work in the chat.** Parallel sessions are isolated and compression forgets; a shared task board is the cross-session working memory that actually holds up.
+The store is half the system. The other half is making sure the agent doesn't lose the thread — and that you can always take your memory with you. That last point is what makes the migration below safe to do in either direction.
 
-The store is half the system. The other half is making sure the agent doesn't lose the thread.
+---
+
+# Appendix: Migrating your ChatGPT memories in
+
+Now that there's a system to migrate *into* — built-in files for durable facts, a semantic provider on top, skills for procedures, a task board for working memory — here's the practical pipeline for bringing your ChatGPT context across. The first problem in migrating memories out of ChatGPT is not extraction. It is **classification**: a memory export is a mixture of preferences, project summaries, stale corrections, private facts, temporary commitments, and instructions that made sense in one product but are dangerous in another. Paste that blob straight in and you don't get continuity — you get memory debt. Treat the export as raw source material and sort it.
+
+## Two exports, two purposes
+
+**1. Official data export** (archival): in ChatGPT, **Settings → Data Controls → Export Data**, confirm, and download the emailed ZIP. Store it privately. This is your audit trail, not your import — too large and noisy to load directly.
+
+**2. Prompt-based memory export** (the import): ask ChatGPT to distil its durable context. Tuned for agent memory rather than one destination product:
+
+```text
+Export all of my stored memories and any durable context you have learned about me
+from past conversations. Preserve my words verbatim where possible, especially for
+instructions, preferences, corrections, and standing rules.
+
+Only include information that appears in stored memory or durable cross-chat context.
+Do not invent facts from this conversation. If you are unsure whether something is
+stored memory or inferred from chat history, label it as uncertain.
+
+Classify each item into exactly one category:
+1. Instructions: explicit rules for future conversations (tone, format, approvals, safety).
+2. Identity: stable personal facts (name, location, languages, interests).
+3. Career: roles, organizations, skills, domains, responsibilities.
+4. Projects: one entry per project — name, purpose, status, key decisions, repo if known.
+5. Preferences: working style, tool choices, writing/learning preferences, taste.
+6. Environment: durable machine, account, repo, deployment, or toolchain facts.
+7. Procedures: reusable workflows or lessons that should become skills, not memory.
+8. Temporary/expiring: reminders, deadlines, one-off tasks, pending approvals.
+9. Contradictions/uncertainty: entries that conflict, look outdated, or need review.
+
+For each entry, output: category; date if known else [unknown]; source confidence
+(high/medium/low); exact memory text; recommended destination (user profile, agent
+memory, skill, project note, scheduled task, archive, discard); and a one-line reason.
+
+Wrap the entire export in a single Markdown code block. After it, state whether more
+memories remain.
+```
+
+If it says more remain, continue until complete. Then **do not paste it straight into the agent** — put it in a source folder first.
+
+## A classification scheme for the import
+
+Sort each item by how it will be *used*:
+
+- **User profile** — stable facts that shape interaction style (name, role, "prefers concise technical answers"). Compact and stable.
+- **Agent memory** — durable environment/project facts ("this repo's test command is X", "the blog uses Jekyll drafts"). Not temporary progress or stale IDs.
+- **Skills** — procedures don't belong in ordinary memory. "When debugging this pipeline, run these five commands in order" becomes a skill: triggers, exact steps, pitfalls, verification. A bad procedure makes the agent repeat a failure forever.
+- **Project notes / Obsidian** — background too detailed for always-loaded memory but worth searching sometimes. Inspectable, linkable, prunable.
+- **Scheduled tasks / commitments** — "follow up after the interview tomorrow" is a scheduled task, not a permanent memory.
+- **Discard / archive** — stale phase status, old PR numbers and commit hashes, "currently working on…", temporary approvals, contradicted preferences, sourceless facts. *A useful import is the smallest set that improves future behavior, not the largest.*
+
+## The pipeline
+
+1. **Export raw account data** (official export) — audit trail, stored privately.
+2. **Run the structured export prompt** — continue until no memories remain.
+3. **Save the export as source material** — a source folder or Obsidian note; don't inject it yet.
+4. **Normalize each entry** — assign scope (global/project/environment/procedure/temporary/archive), durability, confidence, source, destination.
+5. **Promote only high-confidence durable entries** — compact facts → user profile / agent memory; reusable workflows → skills; detail → notes; stale → discard.
+6. **Run an initial review/consolidation pass** — which entries contradict, which are too temporary, which instructions are unsafe without action boundaries, which should become skills, which need human review.
+7. **Schedule recurring consolidation** — memory cleanup is routine, not one-time. A weekly/monthly pass reviews recent sessions, memory changes, and unresolved contradictions, and proposes a *reviewable diff* (additions, removals, merges) with evidence — never a silent mutation.
+
+The target is a memory system that is **transparent** (you can see what the agent believes), **scoped** (project memories don't bleed across work), **action-aware** (approvals and risky instructions carry boundaries — see the security disclaimer up top), and **self-cleaning**. Migrating memories isn't a one-time copy-paste; it's the start of a memory operating system you own.
+
+## Side note: handing a single ChatGPT conversation to your agent
+
+Sometimes you don't want your whole profile — just one useful conversation as source material. Public ChatGPT **share links** are ideal because they can be fetched without giving the agent your account. A small procedural skill makes the handoff one line: *"fetch this ChatGPT share into `/data`: https://chatgpt.com/share/…"*. The agent downloads it as Markdown/HTML with a tool like [`csctf`](https://github.com/Dicklesworthstone/chat_shared_conversation_to_file), spot-checks it, and reports the paths.
+
+```bash
+# install (Bun); review any installer before piping remote code to a shell
+export BUN_INSTALL="$HOME/.bun"; export PATH="$BUN_INSTALL/bin:$PATH"
+command -v bun >/dev/null || { curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh && bash /tmp/bun-install.sh; }
+git clone https://github.com/Dicklesworthstone/chat_shared_conversation_to_file "$HOME/csctf" && cd "$HOME/csctf"
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 bun install && bun run build
+
+# fetch a share into a stable path
+csctf 'https://chatgpt.com/share/<id>' --timeout-ms 90000 --outfile /data/chatgpt-shares/chatgpt-share-<id>
+```
+
+Two cautions: it only works on **public** share URLs (private history needs the official export above), and **a transcript is evidence, not memory** — the agent still has to decide whether it contains a durable preference, a project note, a reusable procedure, a temporary task, or nothing worth promoting. Which brings us back to the whole point: the value isn't in copying everything across. It's in owning a system disciplined enough to keep only what makes the agent better.
