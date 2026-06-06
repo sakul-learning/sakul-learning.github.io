@@ -1,7 +1,7 @@
 ---
 layout: post
-title: "Migrating ChatGPT Memories Into Agent Memory"
-summary: "A practical design note on exporting ChatGPT memories, classifying them for Hermes, and building an agent memory system that can consolidate, dream, and forget safely."
+title: "Migrating Out of ChatGPT: Memory You Own, on an Agent That Runs Your Code"
+summary: "Why and how to move off subscription memory toward something you own and run yourself. First what to migrate into — the substrate choices (Obsidian, Honcho, local files, owned Postgres), how Hermes memory actually works, and the pitfalls we hit (including the auxiliary-LLM layer) — then, as an appendix, the validated pipeline for migrating your ChatGPT memories in."
 tags:
   - ai-agents
   - memory
@@ -10,6 +10,9 @@ tags:
   - openclaw
   - honcho
   - obsidian
+  - hindsight
+  - kanban
+  - migration
 source_folder: sources/migrating-chatgpt-memories-agent-memory
 sources:
   - title: "Switch to Claude Without Starting Over"
@@ -36,6 +39,9 @@ sources:
   - title: "plastic-labs/honcho"
     url: "https://github.com/plastic-labs/honcho"
     note: "Honcho repository describing the store-reason-query-inject loop, self-hosting, SDKs, and peer-centric memory model."
+  - title: "Hindsight (Vectorize) memory"
+    url: "https://hindsight.vectorize.io/"
+    note: "Hindsight knowledge-graph agent memory: cloud API and local modes, observations layer, and the reflect synthesis tool; the cloud backend we adopted."
   - title: "Why Anthropic Gave Claude a Bedtime"
     url: "https://www.softpagecms.com/2026/05/23/anthropic-claude-dreaming-agent-memory-consolidation/"
     note: "Secondary report on Anthropic's 'dreaming' concept as scheduled offline consolidation of persistent memory, with reviewable output stores."
@@ -44,58 +50,107 @@ sources:
     note: "Technical walkthrough of a Claude-style auto-dream memory consolidation pass: orientation, signal gathering, consolidation, pruning, and indexing."
   - title: "chat_shared_conversation_to_file"
     url: "https://github.com/Dicklesworthstone/chat_shared_conversation_to_file"
-    note: "Public-share conversation exporter (`csctf`) that converts ChatGPT, Claude, Gemini, and Grok share URLs into Markdown and HTML; used as the side-note example for handing a single ChatGPT conversation to an agent as source material."
+    note: "Public-share conversation exporter (`csctf`) that converts ChatGPT, Claude, Gemini, and Grok share URLs into Markdown and HTML; used in the appendix for handing a single ChatGPT conversation to an agent as source material."
 ---
 
-The first problem in migrating memories out of ChatGPT is not extraction. It is classification.
+If you pay for ChatGPT or Claude, your "memory" lives on someone else's servers, governed by someone else's product decisions, and bound to one assistant. This post is about migrating *out* of that — toward memory you own, on an agent you run yourself.
 
-A memory export is not one thing. It is a mixture of user preferences, project summaries, stale corrections, tool quirks, private facts, temporary commitments, and instructions that may have made sense in one product but become dangerous in another. If we paste that blob straight into Hermes, OpenClaw, Claude, or any long-running agent, we do not get continuity. We get memory debt.
+The reason it's worth the effort isn't just data ownership. It's that a self-hosted agent can do things a subscription assistant won't. The agent this is written for — a self-hosted [Hermes](https://hermes-agent.nousresearch.com/) — doesn't just *read* a pull request and opine. It checks out the branch, installs dependencies, **runs the tests, and exercises real scenarios** before it comments. That's well beyond what a read-only "sandbox" memory provider is willing to give you.
 
-The better migration path is to treat ChatGPT memories as raw source material, then sort them into a memory architecture with clear boundaries: what should be loaded every turn, what should live in searchable history, what should become a skill or workflow, what should expire, and what should be thrown away.
+> **Security disclaimer.** Running untrusted code from PR branches is powerful and dangerous. Doing it safely needs strict mechanisms — **allowlists for trusted authors**, scrubbing of untrusted inputs, and tight action boundaries — so a hostile PR can't turn your agent into a foothold. We'll cover that hardening in a future article. Until then: only point this kind of automation at repositories and authors you control.
 
-That is why the starting comparison should not be “How do I copy memories?” It should be: **what kind of memory substrate do I want the agent to trust?**
+But before you migrate anything *in*, you need to know what you're migrating *into*. The first problem in migrating memories out of ChatGPT is not extraction — it's **classification**, and that only makes sense once you've chosen a memory architecture. So we'll work in that order: the substrate, how Hermes memory actually works, the pitfalls we hit standing it up, and then — in the appendix — the validated pipeline for bringing your ChatGPT memories across.
 
-## Three substrates: Obsidian, Honcho, and local filesystem memory
+## First question: what substrate do you want the agent to trust?
 
-For Hermes-style agents, three practical memory substrates are worth comparing before importing anything.
+A memory export is a mixture of preferences, project summaries, stale corrections, private facts, temporary commitments, and instructions that made sense in one product but are dangerous in another. Paste that blob straight in and you don't get continuity — you get **memory debt**. The starting question isn't "how do I copy memories?" It's *what kind of substrate do I want the agent to trust?*
+
+For Hermes-style agents, four substrates are worth comparing before importing anything:
 
 | Substrate | Best at | Weakness | Migration role |
 | --- | --- | --- | --- |
-| Obsidian | Human-owned notes, backlinks, long-form project knowledge, evergreen context | Not automatically agentic unless an agent searches/edits it deliberately | Good archive and review layer for imported memories before promotion |
-| Honcho | AI-native memory, user modeling, semantic recall, inferred patterns, multi-agent continuity | Service dependency, abstraction over the raw data, needs trust and governance | Good reasoning layer for cross-session personalization and dynamic recall |
-| Local filesystem memory | Transparent, inspectable, versionable Markdown/JSON files inside the agent workspace | Can become messy, duplicated, or stale without curation | Good source-of-truth layer for durable facts, preferences, decisions, and lessons |
-| Self-hosted Postgres / pgvector stack | Owned database, embeddings, semantic search, structured metadata, exportable rows | More operational work than a hosted memory backend; easier to build a worse Honcho by accident | Good owned-data retrieval layer when the team already runs a compose stack, such as Firecrawl with Postgres |
+| **Obsidian** | Human-owned notes, backlinks, long-form project knowledge | Not agentic unless an agent deliberately searches/edits it | Archive + review layer for imported memories before promotion |
+| **Honcho** | AI-native memory, user modeling, semantic recall, inferred patterns | Service dependency, abstraction over raw data, needs governance | Reasoning layer for cross-session personalization and recall |
+| **Local filesystem memory** | Transparent, inspectable, versionable Markdown/JSON in the workspace | Becomes messy/duplicated/stale without curation | Source-of-truth layer for durable facts, preferences, lessons |
+| **Self-hosted Postgres / pgvector** | Owned database, embeddings, semantic search, exportable rows | More ops than a hosted backend; easy to build a worse Honcho by accident | Owned retrieval layer when you already run a compose stack (e.g. Firecrawl + Postgres) |
 
-Obsidian is excellent when the human wants a personal knowledge base. It is a notebook first and an agent memory backend second. Its strength is reviewability: you can put imported memories into folders, add backlinks, tag them, and decide what deserves to be promoted.
+A few notes from evaluating each:
 
-Honcho is almost the opposite. It is built for agents that need statefulness. Honcho stores messages and events, reasons over them in the background, builds representations of users and agents, and returns prompt-ready context. That is powerful because the agent does not need to manually maintain every fact. But it also means you need governance: what is the source of truth, what can the service infer, and how do you inspect or override conclusions?
+- **Obsidian** is excellent when the human wants a personal knowledge base — it's a notebook first, an agent backend second. Its strength is reviewability: drop imported memories into folders, backlink and tag them, decide what deserves promotion. We treat it as **a path worth evaluating but didn't explore here** — a great human-review staging area if you want one, orthogonal to the agent's live recall.
+- **Honcho** is almost the opposite — built for agents that need statefulness: it stores messages and events, reasons over them in the background, builds representations of users and agents, and returns prompt-ready context. Powerful, because the agent doesn't manually maintain every fact. We researched self-hosting it seriously, and the catch on a small box is real: it's several long-running services (API, a background "deriver", Postgres+pgvector, Redis) and the deriver **must** call out to an LLM/embedding provider, so it's neither free nor fully local unless you accept a trusted external endpoint. Strong as a *reasoning* layer; heavy as the *only* layer.
+- **Local filesystem memory** is the simplest and most auditable substrate. [OpenClaw's docs](https://docs.openclaw.ai/concepts/memory) make it explicit: the agent remembers by writing plain Markdown; the model only "remembers" what's on disk. Hermes has the same spirit. The advantage is transparency; the danger is entropy.
+- **Owned Postgres / pgvector** is the pragmatic fourth option if you already run the infrastructure — a Firecrawl compose stack with Postgres gives you most of an owned semantic-search layer if the image has (or can add) pgvector. But "nearest-neighbour search" is retrieval, not memory judgment: a table can find similar memories; it can't decide which preference is global, which note is stale, or which lesson should become a skill.
 
-Local filesystem memory is the simplest and most auditable substrate. OpenClaw’s docs make this explicit: the agent remembers by writing plain Markdown files in its workspace; the model only “remembers” what gets written to disk. Hermes has the same spirit in its built-in memory and skills: user facts, environment facts, and procedural lessons are persisted outside the transient chat. The advantage is transparency. The danger is entropy.
+The lesson is to **layer them, not collapse them**: source notes/Obsidian for raw imported material and human review; local files for curated, durable, inspectable facts; a reasoning/semantic provider (Honcho, Hindsight) for inferred recall; owned Postgres/pgvector when you need local retrieval without surrendering the data plane. Keep the export path under your control throughout.
 
-There is also a pragmatic fourth option: use infrastructure we already own. A full Firecrawl compose stack with Postgres probably gives us most of the operational ingredients for an owned semantic-search layer, especially if the Postgres image includes pgvector or can be extended to include it. That does not automatically mean we should build the whole memory system ourselves. It means the buy-vs-build question should be framed carefully: buy or use Honcho-style reasoning when it saves time and improves quality, but keep the raw memory data, embeddings, source notes, and export path under our control.
+## How Hermes agent memory actually works
 
-A good migration should use all three layers differently:
+Concretely, Hermes starts with a built-in memory that is just plain Markdown: a `MEMORY.md` of durable facts and a `USER.md` profile, always loaded, transparent, version-controllable — the model only "remembers" what's literally on disk. On top of that it supports a **pluggable external provider** for semantic recall, in a layered model: the files stay the inspectable **source of truth**; the provider adds embedding search and synthesis and is swappable.
 
-1. **Obsidian or source notes** for imported raw material and human review.
-2. **Local filesystem memory** for curated, durable, inspectable facts.
-3. **Honcho** for inferred representations, semantic recall, and cross-session personalization.
-4. **Owned Postgres / pgvector retrieval** when we need local semantic search without surrendering the data plane.
+That's the design. Standing it up taught us where the sharp edges are.
 
-Do not collapse those layers into one giant memory file.
+## The pitfalls we hit standing it up
 
-## Exporting ChatGPT memories: two different exports
+### 1. The built-in file memory has a silent ceiling
+
+Built-in memory has a character cap (ours was 2,200). One day the agent quietly started **refusing to store new memories** — `Memory at 2,113/2,200 chars; adding this entry would exceed the limit`. It didn't fail loudly; it just stopped learning. A flat growing file also accumulates **entropy** (duplicates, contradictions) and offers **no semantic recall** (it finds only what it wrote verbatim and can grep for). Great as a source of truth; you want a semantic layer on top.
+
+### 2. "Local embedded" backends can try to reshape your runtime
+
+Hindsight has a tempting local-embedded mode: an on-instance daemon with built-in Postgres that auto-stops when idle, local embeddings, your own LLM key. Lovely on paper. But a dry-run of the install resolved to **159 packages including the full CUDA toolkit** (useless on a GPU-less ARM box) and wanted to **downgrade `cryptography` inside the agent's own virtualenv**. Lesson: `--dry-run` any backend install and read what it touches. A memory layer should never get to mutate your agent's dependencies.
+
+### 3. "Just run mem0 locally" is not a flag you flip
+
+mem0 is the obvious open-source choice, and Hermes ships a mem0 plugin — but the stock plugin is **Mem0-Cloud only**: it instantiates the hosted client and needs a Mem0 API key. Self-hosted/OSS mode is an *open, unmerged feature request*, not shipped. "Local mem0" means writing a custom provider, not selecting one.
+
+### 4. A cheap LLM key is not an embeddings key
+
+We wanted everything on one inexpensive DeepSeek key. Worth knowing: **DeepSeek's API has no embeddings endpoint** — chat completions only. Any vector backend still needs a separate embedding model. The clean answer is a small *local* embedder (`bge-small`, 384-dim, ~100 MB, no key) — another resident process on a RAM-tight box.
+
+### 5. Ladybug and Holographic — local options worth knowing
+
+Two local providers are worth a mention even though we didn't adopt them. **Ladybug** is a community plugin that backs memory with an embedded graph database (a fork of Kuzu), giving memories a *typed, linked* model — preferences, facts, projects, people, events — with importance scores and named edges, and needing no API key. That data model is more expressive than a flat vector store, and it's a **genuinely promising** project. But it's **young — only about two months old, a couple of commits, effectively a single maintainer** — and it loads its stack (graph DB + ONNX embeddings) in-process and resident, with no idle release. One to *watch and experiment with*, not yet to depend on for a daily driver. **Holographic**, by contrast, is Hermes' zero-dependency escape hatch: pure-Python Holographic Reduced Representations over SQLite — no LLM, no embeddings, no network, no keys. Tiny and fully local; the trade-off is that recall is *algebraic*, not semantic.
+
+### 6. Mind the auxiliary-LLM layer — it's where memory quietly breaks
+
+The pitfall most people miss. Your agent doesn't make one LLM call per turn; it makes **many**, most not to your main model: **context compression**, **title generation, triage, profile description, kanban decomposition**, and — crucially — **memory itself** (extracting facts to *retain*, reasoning over a *recall*) are model calls separate from the main turn.
+
+Two things bit us. First, these auxiliaries defaulted to providers we had **no credit or auth** for, so they failed — and compression was set to **fail *open***, meaning when the summarizer errored it proceeded *without* a summary and **silently dropped context the agent needed**. Memory loss that looks like the model "forgetting" is often a broken auxiliary. We repointed every auxiliary to one funded, cheap model. Second, in **cloud** memory the retain/recall calls are *metered*, so the same levers that control RAM locally now control your bill: retain less often, lean recall budget. Treat the auxiliary layer as first-class: configure it, fund it, pick a cheap model on purpose.
+
+### 7. For a small box, cloud memory is a reasonable default — with an escape hatch
+
+Stack the constraints — 8 GB, no GPU, disk pressure, one cheap LLM key — and a **cloud** memory service is the better engineering choice for *this* box; the agent keeps only a light HTTP client. **mem0 Cloud (free Hobby)** caps at ~**1,000 retrievals/month**, which an always-on agent burns in days; **[Hindsight Cloud](https://hindsight.vectorize.io/)** is usage-based with **no request wall**, tunable via retain/recall frequency. We chose Hindsight Cloud, keeping built-in `MEMORY.md` as the always-on source of truth. The one rule: pick a provider with a real **export** path so cloud stays low-regret — which is also what makes the appendix's migration work in reverse.
+
+### 8. A task board is working memory, too
+
+The most useful thing we learned wasn't about the store. During parallel work — several Discord threads open at once — the agent kept "forgetting" a task, then lost it after a compression. Two facts: **each Discord thread is its own isolated session** (they don't share live context), and compression can summarize an in-flight instruction away. The fix isn't more memory tokens — it's a **shared task board**. Hermes' SQLite-backed `kanban` is durable across every session, thread, and scheduled job, and survives compression. We wired our PR-reviewer to record its work there: the script deterministically creates one task per PR (idempotent — re-reviews append rather than duplicate), the agent only *comments* progress, and the script owns closing/blocking it, so a mid-review compression can't orphan it. The task board as first-class working memory is a direction worth exploring much further.
+
+## Takeaways
+
+- Choose a substrate deliberately and **layer** them; keep the built-in Markdown files as the inspectable source of truth and watch the size cap — it fails silently.
+- `--dry-run` any backend install. On a small/ARM/no-GPU box, "local embedded" can mean CUDA and a runtime-mutating dependency set.
+- A cheap LLM key ≠ embeddings.
+- **Configure and fund the auxiliary-LLM layer deliberately** — compression and memory extraction are where context quietly disappears.
+- For constrained boxes, cloud memory is fine *if* it has an export path.
+- Don't put durable, multi-step work in the chat; a shared task board is the cross-session working memory that holds up.
+
+The store is half the system. The other half is making sure the agent doesn't lose the thread — and that you can always take your memory with you.
+
+---
+
+# Appendix: Migrating your ChatGPT memories in
+
+Now that there's a system to migrate *into* — built-in files for durable facts, a semantic provider on top, source notes/Obsidian for raw material, skills for procedures, a task board for working memory — here's the validated pipeline for bringing your ChatGPT context across. Remember the framing: the export is **raw source material**, not memory. The work is classification.
+
+## Two exports, two purposes
 
 There are two useful ways to get information out of ChatGPT, and they solve different problems.
 
-The first is OpenAI’s official data export. OpenAI’s Help Center says users can export account data from ChatGPT by going to **Settings → Data Controls → Export Data**, confirming the export, and downloading the emailed ZIP link. Users can also request data through the Privacy Portal. This can include chat history and other account data, although OpenAI notes that exports may take time and the link expires.
+**1. OpenAI's official data export** (archival). Per [OpenAI's Help Center](https://help.openai.com/en/articles/7260999-how-do-i-export-my-chatgpt-history-and-data), go to **Settings → Data Controls → Export Data**, confirm, and download the emailed ZIP (the link expires; exports can take time). You can also request data through the Privacy Portal. This is good for archival analysis but **too large and noisy to import directly** — keep it as a private audit trail.
 
-That export is good for archival analysis, but it is too large and noisy to import directly into an agent memory system.
+**2. A prompt-based memory export** (the import). [Anthropic's Claude import page](https://claude.com/import-memory) describes the lightweight pattern: copy a prompt into the old provider, ask it to extract the important context, paste the result in. This doesn't migrate every transcript — it migrates the **distilled profile**: preferences, instructions, projects, work style, recurring context. For Hermes, the same idea applies, but the output should be **classified before it touches memory**.
 
-The second is a prompt-based memory export. Anthropic’s Claude import page describes a lightweight workflow: copy a provided prompt into the old AI provider, ask it to extract the important context, then paste the result into Claude’s memory import settings. This does not migrate every transcript. It migrates the distilled profile: preferences, instructions, projects, work style, and recurring context.
-
-For Hermes, the same idea is useful, but the output should be classified before it touches memory.
-
-Here is a migration prompt adapted from the Claude-style workflow, tuned for agent memory systems rather than one destination product:
+Here is a migration prompt adapted from the Claude-style workflow, tuned for agent memory systems rather than one destination product. The validation in it — verbatim preservation, the uncertain-source label, the strict one-category rule, the per-entry destination + confidence, and the "state whether more remain" loop — is what keeps the import honest:
 
 ```text
 Export all of my stored memories and any durable context you have learned about me from past conversations. Preserve my words verbatim where possible, especially for instructions, preferences, corrections, and standing rules.
@@ -125,9 +180,32 @@ For each entry, output:
 Wrap the entire export in a single Markdown code block. After the code block, state whether more memories remain.
 ```
 
-If ChatGPT says more memories remain, continue until the export is complete. Then do not paste it straight into Hermes. Put it in a source folder first.
+If it says more remain, **continue until the export is complete**. Then do not paste it straight into the agent — put it in a source folder first.
 
-### Side note: sharing a single ChatGPT conversation with your agent
+## A classification scheme for the import
+
+Sort each item by how it will be *used*:
+
+- **User profile** — stable facts that shape interaction style (name, role, "prefers concise technical answers"). Compact and stable; these affect the agent across every session.
+- **Agent memory** — durable environment/project facts ("this repo's test command is X", "the blog uses Jekyll drafts before publishing"). Not temporary progress or stale artifact IDs.
+- **Skills** — procedures don't belong in ordinary memory. "When debugging this pipeline, run these five commands in order" becomes a skill: triggers, exact steps, pitfalls, verification. Procedural memory is operational — a bad procedure makes the agent repeat the same failure forever.
+- **Project notes / Obsidian** — background too detailed for always-loaded memory but worth searching sometimes. If the agent may need to search it occasionally but shouldn't read it every session, it belongs in notes, not memory.
+- **Scheduled tasks / commitments** — "follow up after the interview tomorrow" is a scheduled task, not a permanent memory. OpenClaw's docs draw the same line: commitments differ from durable facts.
+- **Discard / archive** — stale phase status, old PR numbers and commit hashes, "currently working on…", temporary approvals, contradicted preferences, sourceless facts. *A useful import is the smallest set that improves future behavior, not the largest.*
+
+## The pipeline
+
+1. **Export raw account data** (official export) — audit trail, stored privately.
+2. **Run the structured export prompt** — continue until no memories remain.
+3. **Save the export as source material** — a source folder or Obsidian note; don't inject it yet.
+4. **Normalize each entry** — assign scope (global user / project / environment / procedure / temporary / archive), durability (permanent / long-lived / short-lived / expired), confidence (high / medium / low), source (explicit / inferred / unknown), destination.
+5. **Promote only high-confidence durable entries** — compact facts → user profile / agent memory; reusable workflows → skills; detail → notes; stale → discard.
+6. **Run an initial consolidation/review pass** — which entries contradict, which are too temporary, which instructions are unsafe without action boundaries (see the disclaimer up top), which should become skills, which need human review.
+7. **Schedule recurring consolidation ("dreaming")** — memory cleanup is routine, not one-time. Run it *asynchronously, off the critical path*; *don't overwrite the source*; produce a **reviewable diff** (additions, removals, merges) with evidence; prefer recency only with evidence; and separate cleanup from promotion (a discovered lesson should still clear a confidence threshold or human review). A dream that can't cite *why* it wants to delete or rewrite a memory shouldn't be allowed to mutate the store.
+
+The target is a memory system that is **transparent** (you can see what the agent believes), **scoped** (project memories don't bleed across work), **action-aware** (approvals and risky instructions carry boundaries), and **self-cleaning**. Migrating memories isn't a one-time copy-paste; it's the start of a memory operating system you own.
+
+## Side note: sharing a single ChatGPT conversation with your agent
 
 The memory-export prompt above is for durable profile context. Sometimes you want a smaller move: take one useful ChatGPT conversation and hand it to your local agent as source material. Public ChatGPT share links are good for this because they can be fetched without giving the agent your ChatGPT account.
 
@@ -261,34 +339,6 @@ PY
 
 If the user asks for a deeper check, read targeted portions of the Markdown with `read_file`, or search for expected phrases using `search_files`.
 
-## Installation / Repair
-
-If csctf is missing, install or rebuild it with Bun:
-
-```bash
-set -euo pipefail
-export BUN_INSTALL="$HOME/.bun"
-export PATH="$BUN_INSTALL/bin:$PATH"
-
-# Install Bun if missing. Review installer scripts before piping remote code to a shell.
-if ! command -v bun >/dev/null 2>&1; then
-  curl -fsSL https://bun.sh/install -o /tmp/bun-install.sh
-  bash /tmp/bun-install.sh
-fi
-
-INSTALL_DIR='<install-dir>/chat_shared_conversation_to_file'
-if [ ! -d "$INSTALL_DIR/.git" ]; then
-  mkdir -p "$(dirname "$INSTALL_DIR")"
-  git clone https://github.com/Dicklesworthstone/chat_shared_conversation_to_file "$INSTALL_DIR"
-else
-  git -C "$INSTALL_DIR" pull --ff-only
-fi
-
-cd "$INSTALL_DIR"
-PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 bun install
-bun run build
-```
-
 If Playwright's browser download is unsupported on the host, configure csctf to use an available system Chrome/Chromium installation.
 
 ## Common Pitfalls
@@ -338,242 +388,3 @@ HTML: <bytes> bytes, <lines> lines
 ````
 
 That last pitfall is the important memory-system point: sharing a ChatGPT conversation with an agent is not the same as making it memory. The export is evidence. The agent still has to decide whether the conversation contains a durable user preference, a project note, a reusable procedure, a temporary task, or nothing worth promoting.
-
-## A classification scheme for Hermes memory imports
-
-A Hermes migration should separate imported items by how they will be used.
-
-### User profile
-
-Use this for stable facts about the user:
-
-- communication preferences
-- name, role, interests, broad working style
-- durable preferences such as “prefers concise technical answers”
-
-These memories affect the agent’s interaction style across sessions. They should be compact and stable.
-
-### Agent memory
-
-Use this for durable environment and project facts:
-
-- “This machine’s GitHub CLI auth is stored under a specific config path”
-- “This repository uses a particular test command”
-- “The blog repo uses Jekyll drafts before publication”
-
-This layer helps the agent act correctly in a specific environment. It should not contain temporary task progress or stale artifact IDs.
-
-### Skills
-
-Procedures do not belong in ordinary memory. If an imported item says, “when debugging this pipeline, run these five commands in this order,” it should become a skill: trigger conditions, exact steps, pitfalls, and verification.
-
-This matters because procedural memory is operational. A bad procedure can make the agent repeat the same failure forever.
-
-### Project notes or Obsidian
-
-Project background that is too detailed for bootstrap memory should live in searchable notes. Obsidian is useful here because the human can inspect, link, and prune it. Local Markdown folders are also fine.
-
-The rule is simple: if the agent may need to search it sometimes but should not read it every session, it belongs in notes, not always-loaded memory.
-
-### Scheduled tasks or commitments
-
-A future check-in is not long-term memory. If the export says “follow up after the interview tomorrow,” that should become a scheduled task or short-lived commitment, not a permanent memory.
-
-OpenClaw’s memory docs make a similar distinction: commitments and scheduled tasks are different from durable facts.
-
-### Discard or archive
-
-Some memories should not migrate:
-
-- stale phase status
-- old PR numbers and commit hashes
-- “currently working on…” entries
-- temporary approvals
-- contradicted preferences
-- facts without a trustworthy source
-
-A useful import is not the largest import. It is the smallest set that improves future behavior.
-
-## Designing a good memory system for agents
-
-A good memory system for agents such as OpenClaw and Hermes needs at least six layers.
-
-### 1. Ephemeral session context
-
-This is the current conversation. It is high-bandwidth and low-durability. It can hold nuance, but it disappears or gets compacted. Do not trust it for anything the agent must remember next week.
-
-### 2. Working notes
-
-OpenClaw uses daily files such as `memory/YYYY-MM-DD.md`. This layer is a work journal: observations, decisions, session summaries, raw notes, and partial context. It is useful because it gives the agent somewhere to write before it knows what matters long term.
-
-Hermes can use source folders, session transcripts, Obsidian notes, or project-local Markdown the same way.
-
-### 3. Curated long-term memory
-
-This is the small memory that loads at startup. In OpenClaw that role is `MEMORY.md`. In Hermes it is the durable user and memory stores injected into future turns. This layer must be concise because every token spent here competes with the task.
-
-A good rule: long-term memory should contain declarations, not logs.
-
-Bad:
-
-> On Tuesday we fixed a bug, opened PR 43, then discussed whether to migrate.
-
-Good:
-
-> The project uses Jekyll drafts for unpublished posts; ask before publishing or pushing.
-
-### 4. Searchable archive
-
-Agents need recall without always-on context bloat. OpenClaw exposes memory search over Markdown files. Hermes has session search and can use file search, Obsidian, and external providers. Honcho adds semantic search over conclusions and messages.
-
-This archive should preserve source material so dreams and audits can check whether a memory is still justified.
-
-If we already run Firecrawl in Docker Compose with Postgres, this layer may not need to start from zero. Firecrawl-style ingestion, a Postgres backing store, and pgvector-capable embeddings can form a local retrieval substrate for memory source material: scraped pages, exported ChatGPT memories, session summaries, Obsidian notes, and dream evidence. The trade-off is that vector search is only retrieval, not memory judgment. A Postgres table can find similar memories; it cannot decide by itself which preference is global, which project note is stale, or which procedural lesson deserves to become a skill. That is where an agentic curator, Honcho-like reasoning layer, or human review remains necessary.
-
-The guiding principle is data ownership. If a hosted memory backend is used, the system should still be able to export its conclusions and rehydrate the local store. If a local pgvector backend is used, the system should not pretend that nearest-neighbor search alone is the same as a good memory model.
-
-### 5. Procedural skills
-
-Skills are different from facts. They tell the agent how to do something reliably. Hermes already treats skills as procedural memory. This is where migrations should put reusable workflows: blog publishing, GitHub PR workflows, debugging playbooks, model-serving setup, and so on.
-
-Skills should include verification steps and known pitfalls, because that is how agents avoid relearning the same operational lesson.
-
-### 6. Governance and policy boundaries
-
-Memory can guide action, but it should not enforce policy by itself. OpenClaw’s docs warn that memory can preserve approval context but does not replace approval settings, sandboxing, or scheduled tasks.
-
-Hermes should follow the same principle. If a memory says a user approved something once, the agent should not treat that as permanent permission. Destructive commands, publishing, account changes, and cross-profile edits need policy enforcement outside memory.
-
-## What Hermes can learn from OpenClaw’s Markdown-first memory
-
-OpenClaw’s Markdown-first design is attractive because it is explicit. Files are the source of truth. `MEMORY.md` is long-term memory. Daily notes are working memory. `DREAMS.md` can store consolidation summaries for review.
-
-Hermes can adopt that pattern even when it uses other backends:
-
-- Keep **always-loaded memory** small and declarative.
-- Keep **working notes** separate from durable facts.
-- Keep **source transcripts** available for audit.
-- Keep **skills** separate from factual memory.
-- Keep **dream outputs** reviewable before promotion.
-
-The key design idea is not “Markdown is perfect.” It is that memory should be inspectable, scoped, and reversible.
-
-## What Hermes can learn from Honcho
-
-Honcho points in another direction: memory is not only stored text; it is a changing representation of people, agents, groups, projects, and ideas.
-
-That matters because many useful memories are not explicit facts. A user may never say, “I learn best through examples,” but a long history of interactions can make that pattern obvious. Honcho’s Dialectic API and working representations are designed for exactly this: store messages, reason over them, query insights, and inject only the context needed for the current turn.
-
-For Hermes, Honcho is most valuable as a reasoning and recall layer, not as the only memory layer. The local store should still hold explicit, inspectable facts. Honcho can then help answer questions such as:
-
-- What does this user usually care about when reviewing code?
-- Which project context is relevant to this thread?
-- Is this preference global, or only true for one domain?
-- What similar issue happened before?
-
-The combination is stronger than either system alone: local files give auditability; Honcho gives synthesis.
-
-## Dreaming: the missing maintenance loop
-
-Long-running memory systems rot.
-
-They collect duplicate entries, old assumptions, relative dates, references to files that no longer exist, and instructions that were true for one phase but wrong later. The more successful the agent is at remembering, the more it needs a way to forget.
-
-That is the role of “dreaming.” Secondary reports describe Anthropic’s dreaming concept as scheduled offline consolidation for managed agents: the agent reviews prior sessions and persistent memory, merges duplicates, resolves contradictions, prunes stale references, identifies recurring mistakes, and produces a cleaned memory store for inspection.
-
-Whether or not every implementation uses Anthropic’s exact mechanism, the architectural pattern is useful:
-
-1. **Do not dream in the critical path.** Run consolidation asynchronously, between tasks.
-2. **Do not overwrite the source.** Keep original transcripts and old memory available.
-3. **Produce a reviewable diff.** The dream should propose additions, removals, merges, and edits.
-4. **Prefer recency only with evidence.** Newer is often right, but not always. A newer hallucination should not erase an older verified fact.
-5. **Separate cleanup from promotion.** A dream can discover a lesson, but durable memory should still require confidence thresholds or human review for sensitive changes.
-
-A Hermes dream pass could work like this:
-
-```text
-Input:
-- current user profile
-- current agent memory
-- relevant session transcripts
-- recent source notes
-- skills usage and patch history
-- optional Honcho conclusions
-
-Process:
-- identify duplicate memories
-- detect contradictions
-- detect stale entries with expiry signals
-- find lessons that should become skills
-- find temporary progress logs that should be removed
-- find missing action boundaries for risky memories
-
-Output:
-- proposed user-profile edits
-- proposed memory edits
-- proposed skill creations or patches
-- proposed archive/discard list
-- evidence links to source sessions or files
-- confidence score and review requirement
-```
-
-The important part is evidence. A dream that cannot cite why it wants to delete or rewrite a memory should not be allowed to mutate the memory system.
-
-## A practical migration pipeline
-
-Here is the workflow I would use to migrate ChatGPT memories into Hermes.
-
-### Step 1: Export raw account data
-
-Use OpenAI’s official data export to preserve the full archive. Store it privately. This is not the import; it is the audit trail.
-
-### Step 2: Run the structured memory export prompt
-
-Ask ChatGPT for a categorized memory export using the prompt above. Continue until it says no more memories remain.
-
-### Step 3: Save the export as source material
-
-Put the raw export in a source folder or Obsidian note. Do not immediately add it to the agent’s injected memory.
-
-### Step 4: Normalize entries
-
-For each item, assign:
-
-- scope: global user, project, environment, procedure, temporary, archive
-- durability: permanent, long-lived, short-lived, expired
-- confidence: high, medium, low
-- source: explicit memory, inferred, unknown
-- destination: user profile, memory, skill, note, schedule, discard
-
-### Step 5: Promote only high-confidence durable entries
-
-Add compact stable facts to the user profile or agent memory. Convert reusable workflows into skills. Put project detail into notes. Discard stale progress.
-
-### Step 6: Run an initial dream review
-
-Before trusting the migrated memory, run a consolidation pass that asks:
-
-- Which entries contradict each other?
-- Which are too temporary for memory?
-- Which instructions are unsafe without action boundaries?
-- Which procedures should become skills?
-- Which entries need human review?
-
-### Step 7: Schedule recurring dreams
-
-Memory cleanup should be routine. A weekly or monthly dream can review recent sessions, memory changes, skill updates, and unresolved contradictions.
-
-## The design principle: memory should be useful, not maximal
-
-A good agent memory system is not a bigger context window. It is a disciplined information lifecycle.
-
-ChatGPT memories are useful raw material. Anthropic’s import workflow shows that a prompt-based profile export can make migration easy. OpenClaw shows the value of transparent Markdown memory. Hermes shows how durable memory and procedural skills can coexist. Honcho shows how reasoning over history can produce better context than raw retrieval. Dreaming shows why every growing memory system needs maintenance.
-
-The final target should be a memory system with four properties:
-
-1. **Transparent**: humans can see what the agent believes.
-2. **Scoped**: project memories do not bleed into unrelated work.
-3. **Action-aware**: approvals, temporary constraints, and risky instructions carry boundaries.
-4. **Self-cleaning**: dreams identify contradictions, stale facts, duplicate entries, and new lessons.
-
-Migrating memories is not a one-time copy-paste. It is the beginning of a memory operating system.
