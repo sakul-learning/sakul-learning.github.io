@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vietnam LAN coding-agent builds — explorer · Sakul Learning</title>
+<meta name="description" content="Interactive hardware-bundle explorer (phongvu.vn, VND) grounded against the 'Building a LAN coding-agent team' article tiers.">
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2a3340;
+    --ink:#e6edf3; --muted:#9aa7b4; --accent:#f0a020; --accent2:#58a6ff;
+    --good:#3fb950; --warn:#d29922; --reuse:#7d8590;
+    --pill:#21262d;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  a{color:var(--accent2);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:1040px;margin:0 auto;padding:28px 18px 80px}
+  header.hd{border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:22px}
+  .kicker{color:var(--accent);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+  h1{font-size:30px;line-height:1.15;margin:.25em 0 .15em}
+  h1 b{color:var(--accent)}
+  .sub{color:var(--muted);max-width:70ch}
+  .targets{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:18px 0 4px}
+  .tcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .tcard h4{margin:0 0 4px;font-size:12.5px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+  .tcard p{margin:0;color:var(--muted);font-size:13px}
+  .controls{position:sticky;top:0;z-index:5;background:linear-gradient(var(--bg),var(--bg) 70%,rgba(13,17,23,.0));
+    padding:14px 0 12px;margin-top:18px;border-bottom:1px solid var(--line)}
+  .row{display:flex;flex-wrap:wrap;gap:18px;align-items:center}
+  .grp{display:flex;flex-direction:column;gap:6px}
+  .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .seg{display:inline-flex;background:var(--pill);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--muted);
+    padding:8px 13px;font:inherit;font-size:13px;cursor:pointer;font-weight:600;white-space:nowrap}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:#1a1205}
+  .seg button:disabled{opacity:.32;cursor:not-allowed}
+  select{background:var(--pill);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-size:13px}
+  .switch{display:inline-flex;align-items:center;gap:9px;cursor:pointer;user-select:none}
+  .switch input{position:absolute;opacity:0}
+  .track{width:42px;height:23px;background:var(--pill);border:1px solid var(--line);border-radius:99px;position:relative;transition:.15s}
+  .knob{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--muted);transition:.15s}
+  .switch input:checked+.track{background:rgba(63,185,80,.25);border-color:var(--good)}
+  .switch input:checked+.track .knob{left:21px;background:var(--good)}
+  .stage{margin-top:24px;display:grid;grid-template-columns:1.55fr 1fr;gap:20px}
+  @media(max-width:820px){.stage{grid-template-columns:1fr}.controls{position:static}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 18px 8px}
+  .card.recommend{border-color:var(--accent);box-shadow:0 0 0 1px rgba(240,160,32,.25)}
+  .bhead{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .btitle{font-size:18px;font-weight:700;margin:0}
+  .badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px;background:var(--pill);color:var(--muted);border:1px solid var(--line)}
+  .badge.tier{color:var(--accent2);border-color:var(--accent2)}
+  .badge.rec{background:var(--accent);color:#1a1205;border:0}
+  table{width:100%;border-collapse:collapse;margin:14px 0 6px;font-size:14px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+  th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+  td.price{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr.reused td{color:var(--reuse)}
+  tr.reused td.item s{color:var(--reuse)}
+  .cat{display:inline-block;width:62px;font-size:11px;color:var(--muted);text-transform:uppercase}
+  .est{font-size:11px;color:var(--warn)}
+  tfoot td{border-top:2px solid var(--line);border-bottom:0;font-weight:700;font-size:16px;padding-top:12px}
+  .fit{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+  .fit h3{margin:0 0 6px;font-size:13px;color:var(--accent);text-transform:uppercase;letter-spacing:.06em}
+  .fit .vram{font-size:13px;color:var(--muted);margin:0 0 10px}
+  .fit p{margin:0 0 10px;font-size:13.5px;color:var(--ink)}
+  .fit .note{font-size:12.5px;color:var(--muted)}
+  .pillrow{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0 4px}
+  .pill{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--pill);border:1px solid var(--line);color:var(--muted)}
+  .pill.ok{color:var(--good);border-color:rgba(63,185,80,.4)}
+  .pill.no{color:#f85149;border-color:rgba(248,81,73,.4)}
+  footer.ft{margin-top:34px;border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:12.5px}
+  footer.ft code{background:var(--pill);padding:1px 5px;border-radius:4px}
+  .fx{font-weight:700;color:var(--ink)}
+  .reuseHint{font-size:12px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hd">
+    <div class="kicker">Hardware explorer · phongvu.vn · prices 2026-06-16</div>
+    <h1>Vietnam builds for a <b>LAN coding-agent team</b></h1>
+    <p class="sub">An interactive companion to
+      <a id="articleLink" href="/2026/06/16/building-a-lan-coding-agent-team/">“Building a LAN coding-agent team before the API door closes.”</a>
+      Toggle the tier, platform, and whether you reuse parts already in <em>podmaster</em>. Prices are live phongvu.vn listings (VND); USD uses today’s rate <span class="fx">1&nbsp;USD ≈ 26,300&nbsp;₫</span>. Items marked <span class="est">est</span> are estimates to confirm.</p>
+
+    <div class="targets">
+      <div class="tcard"><h4>Target model band</h4><p>12B–27B coding models. Reference: <strong>Gemma&nbsp;4 12B Coder Q4_K_M (~7&nbsp;GB)</strong>.</p></div>
+      <div class="tcard"><h4>Speed target</h4><p>50+ tok/s per active stream (100+ solo). Optimise <strong>aggregate</strong> throughput for the team.</p></div>
+      <div class="tcard"><h4>Serving</h4><p>llama.cpp/GGUF to start → <strong>vLLM</strong> (CUDA) for multi-agent batching.</p></div>
+      <div class="tcard"><h4>The real bill</h4><p>Weights aren’t the cost — <strong>KV cache</strong> for long repo context is. Size memory for context + batching.</p></div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="row">
+      <div class="grp">
+        <span class="lbl">Tier (from the article)</span>
+        <div class="seg" id="tierSeg">
+          <button data-tier="1" aria-pressed="false">T1 · Solo</button>
+          <button data-tier="2" aria-pressed="true">T2 · Agent team</button>
+          <button data-tier="3" aria-pressed="false">T3 · Shared server</button>
+        </div>
+      </div>
+      <div class="grp">
+        <span class="lbl">Platform</span>
+        <div class="seg" id="platSeg">
+          <button data-plat="diy" aria-pressed="true">DIY · NVIDIA</button>
+          <button data-plat="apple" aria-pressed="false">Apple Silicon</button>
+        </div>
+      </div>
+      <div class="grp" id="gpuGrp" style="display:none">
+        <span class="lbl">T1 GPU</span>
+        <select id="gpuSel">
+          <option value="5070ti">RTX 5070 Ti 16GB</option>
+          <option value="5080">RTX 5080 16GB</option>
+        </select>
+      </div>
+      <div class="grp">
+        <span class="lbl">Reuse podmaster parts</span>
+        <label class="switch"><input type="checkbox" id="reuseChk" checked><span class="track"><span class="knob"></span></span><span id="reuseTxt">On</span></label>
+      </div>
+      <div class="grp">
+        <span class="lbl">Currency</span>
+        <div class="seg" id="curSeg">
+          <button data-cur="vnd" aria-pressed="true">VND ₫</button>
+          <button data-cur="usd" aria-pressed="false">USD $</button>
+        </div>
+      </div>
+    </div>
+    <div class="reuseHint" id="reuseHint">Reuse on: podmaster already has CPU/mainboard/NVMe/case + screen, keyboard, mouse, and the wired LAN switch — only new parts are billed.</div>
+  </div>
+
+  <div class="stage">
+    <div class="card" id="bomCard">
+      <div class="bhead">
+        <h2 class="btitle" id="bomTitle">—</h2>
+        <span id="bomBadges"></span>
+      </div>
+      <table>
+        <thead><tr><th>Component</th><th class="price">Price</th></tr></thead>
+        <tbody id="bomBody"></tbody>
+        <tfoot><tr><td>Total</td><td class="price" id="bomTotal">—</td></tr></tfoot>
+      </table>
+    </div>
+
+    <div class="fit" id="fitCard">
+      <h3>What it runs &amp; article fit</h3>
+      <p class="vram" id="fitVram"></p>
+      <div class="pillrow" id="fitPills"></div>
+      <p id="fitBody"></p>
+      <p class="note" id="fitNote"></p>
+    </div>
+  </div>
+
+  <section class="card" id="srcCard" style="margin-top:24px">
+    <div class="bhead">
+      <h2 class="btitle" id="srcTitle">Buy list &amp; PhongVu sources</h2>
+      <span class="badge">phongvu.vn · 2026-06-16</span>
+    </div>
+    <table>
+      <thead><tr><th>Component</th><th class="price">Price</th><th>Source</th></tr></thead>
+      <tbody id="srcBody"></tbody>
+      <tfoot><tr><td>To purchase</td><td class="price" id="srcBuyTotal">—</td><td></td></tr></tfoot>
+    </table>
+    <p class="reuseHint" id="srcReused"></p>
+    <p class="reuseHint">Filtered to the current selection above. Confirmed = live phongvu.vn page (click ↗); <span class="est">est</span> = no firm SKU yet, estimate to confirm.</p>
+  </section>
+
+  <footer class="ft">
+    <p>Prices captured 2026-06-16 from <a href="https://phongvu.vn" target="_blank" rel="noopener">phongvu.vn</a> (RTX 5070 Ti 35.59M, RTX 5080 44.99M, RTX 5090 32GB 119.99M, RTX PRO 6000 96GB 405.9M, Mac Studio M4 Max 64GB 82.99M, Mac Studio M3 Ultra 96GB 116.49M, Ryzen 9 7900 10.49M / 9900X 12.7M, B650 7.49M, 64GB DDR5-6000 6.99M, Corsair RM1000e 4.39M). FX <code>1 USD ≈ 26,300 ₫</code> (Investing.com, 2026-06-16). 64GB DDR4 = matched 2×32 DDR4-3200 kit 11.5M (Gigabyte Designare, listed). <strong>DDR4 is EOL-price-spiked</strong> (a single 16GB stick is ~3.79M), so 64GB DDR4 (11.5M) now costs <em>far more</em> than 64GB DDR5-6000 (6.99M) — reusing podmaster’s DDR4 platform saves on CPU+mainboard, not RAM. Estimated lines (<span class="est">est</span>): Ryzen 7 7700 ~7M, B650M ~4.5M, 750W PSU ~2.8M, ATX case ~2M, 2TB Gen4 NVMe ~4.5M.</p>
+    <p>Reuse baseline = <em>podmaster</em>: Intel i5-12400F, Gigabyte B760M DS3H DDR4, 32GB DDR4, existing NVMe, case, display/keyboard/mouse, wired LAN switch. For GPU-resident inference the CPU barely matters, so reuse is the cost-effective DIY path. Apple boxes are complete units (reuse N/A) and run MLX/llama.cpp — not vLLM/CUDA. Grounded against <a id="articleLink2" href="/2026/06/16/building-a-lan-coding-agent-team/">the article</a>.</p>
+  </footer>
+</div>
+
+<script>
+const FX = 26300;
+const M = 1e6;
+// component costs in VND
+const C = {
+  gpu5070ti:35.59*M, gpu5080:44.99*M, gpu5090:119.99*M, gpuPro6000:405.9*M,
+  cpu7700:7*M, cpu7900:10.49*M, cpu9900x:12.7*M,
+  moboB650m:4.5*M, moboB650:7.49*M,
+  ram64ddr5:6.99*M, ram64ddr4up:11.5*M,
+  psu750:2.8*M, psu1000:4.39*M,
+  caseAtx:2*M, nvme2tb:4.5*M,
+  macM4Max64:82.99*M, macM3Ultra96:116.49*M
+};
+const E='est';
+// item helper: {cat,name,vnd,est?,reused?}
+function it(cat,name,vnd,opt){return Object.assign({cat,name,vnd},opt||{});}
+
+// Bundles keyed by tier->platform->reuse(bool). Solo DIY also varies by gpu.
+function bundles(gpu){
+ return {
+  1:{
+   diy:{
+     true:{title:'DIY · GPU into podmaster', tier:1, rec:true,
+       items:[
+         it('GPU', gpu==='5080'?'RTX 5080 16GB (MSI Ventus)':'RTX 5070 Ti 16GB (ASUS TUF)', gpu==='5080'?C.gpu5080:C.gpu5070ti),
+         it('PSU','~750W ATX 3.0',C.psu750,{est:1}),
+         it('CPU','Intel i5-12400F',C.cpu7700,{reused:1}),
+         it('Mobo','B760M DS3H',C.moboB650m,{reused:1}),
+         it('RAM','32GB DDR4 (existing)',C.ram64ddr5,{reused:1}),
+         it('Store','NVMe (existing)',C.nvme2tb,{reused:1}),
+         it('Case','case + peripherals',C.caseAtx,{reused:1})
+       ],
+       fit:{vram:(gpu==='5080'?'16GB GDDR7 · ~960 GB/s':'16GB GDDR7 · ~896 GB/s'),
+         pills:[['Article T1','ok'],['vLLM/CUDA','ok'],['Team serving','no']],
+         body:'Runs <b>Gemma 4 12B Coder Q4_K_M (~7GB)</b> with healthy context room on 16GB — exactly the article’s Tier-1 “16GB GPU” path. '+(gpu==='5080'?'The 5080 adds compute/bandwidth headroom over the 5070 Ti at the same 16GB.':'The 5070 Ti is the value entry; step up to the 5080 for more compute at the same 16GB.'),
+         note:'Great solo assistant. Not where you’d run a team of autonomous agents — 16GB limits KV cache once agents send long repo context.'}},
+     false:{title:'DIY · fresh AM5 box', tier:1,
+       items:[
+         it('GPU', gpu==='5080'?'RTX 5080 16GB':'RTX 5070 Ti 16GB', gpu==='5080'?C.gpu5080:C.gpu5070ti),
+         it('PSU','~750W ATX 3.0',C.psu750,{est:1}),
+         it('CPU','Ryzen 7 7700',C.cpu7700,{est:1}),
+         it('Mobo','B650M',C.moboB650m,{est:1}),
+         it('RAM','64GB DDR5-6000',C.ram64ddr5),
+         it('Store','2TB Gen4 NVMe',C.nvme2tb,{est:1}),
+         it('Case','ATX case',C.caseAtx,{est:1})
+       ],
+       fit:{vram:(gpu==='5080'?'16GB GDDR7':'16GB GDDR7'),
+         pills:[['Article T1','ok'],['vLLM/CUDA','ok'],['Team serving','no']],
+         body:'Same 16GB capability as the reuse build, but a standalone box so podmaster keeps its current duties.',
+         note:'Only worth it over the reuse build if you want a separate, dedicated inference machine.'}}
+   },
+   apple:{
+     true:{title:'Apple · Mac Studio M4 Max 64GB', tier:1, apple:1,
+       items:[ it('Box','Mac Studio M4 Max · 16C/40GPU · 64GB · 1TB',C.macM4Max64) ],
+       fit:{vram:'64GB unified · 546 GB/s',
+         pills:[['Article T1 (Apple)','ok'],['vLLM/CUDA','no'],['Big models','ok']],
+         body:'64GB unified runs 12B easily and can even hold a 27B — a complete, quiet, low-power box.',
+         note:'MLX / llama.cpp only (no vLLM). Ideal as a single private assistant; weaker for the concurrent multi-agent target.'}}
+   }
+  },
+  2:{
+   diy:{
+     true:{title:'DIY · RTX 5090, reuse podmaster', tier:2, rec:true,
+       items:[
+         it('GPU','RTX 5090 32GB (ASUS ROG Astral OC)',C.gpu5090),
+         it('PSU','Corsair RM1000e 1000W ATX 3.1',C.psu1000),
+         it('RAM','64GB DDR4 · 2×32 matched kit',C.ram64ddr4up,{note:'DDR4 EOL-spiked — DDR5 64GB is cheaper'}),
+         it('Case','ATX case (5090 clearance)',C.caseAtx,{est:1}),
+         it('CPU','Intel i5-12400F',C.cpu7900,{reused:1}),
+         it('Mobo','B760M DS3H (PCIe 4.0 x16)',C.moboB650,{reused:1}),
+         it('Store','NVMe (existing)',C.nvme2tb,{reused:1})
+       ],
+       fit:{vram:'32GB GDDR7 · 1792 GB/s',
+         pills:[['Article T2 sweet spot','ok'],['vLLM/CUDA','ok'],['Team serving','ok']],
+         body:'The article’s recommended workstation. 32GB holds a <b>12B fast lane</b> plus a <b>27B Q4/Q5 deep lane</b>, with room for KV cache on long repo context. CUDA → <b>vLLM batching</b> for the multi-agent team.',
+         note:'Reusing podmaster’s CPU/mainboard/NVMe is fine — for GPU-resident inference the CPU is near-irrelevant. New PSU + ATX case are mandatory (the 358mm 3.8-slot card needs the room and 575W). Note: DDR4 is EOL-spiked, so the 64GB upgrade (~11.5M) costs far more than a fresh 64GB DDR5 kit (6.99M) — the reuse saving is now CPU+mainboard, not RAM.'}},
+     false:{title:'DIY · RTX 5090, fresh AM5 box', tier:2,
+       items:[
+         it('GPU','RTX 5090 32GB',C.gpu5090),
+         it('PSU','Corsair RM1000e 1000W ATX 3.1',C.psu1000),
+         it('CPU','Ryzen 9 7900 (12c)',C.cpu7900),
+         it('Mobo','B650 (DDR5, PCIe 5.0)',C.moboB650),
+         it('RAM','64GB DDR5-6000',C.ram64ddr5),
+         it('Store','2TB Gen4 NVMe',C.nvme2tb,{est:1}),
+         it('Case','ATX case',C.caseAtx,{est:1})
+       ],
+       fit:{vram:'32GB GDDR7 · 1792 GB/s',
+         pills:[['Article T2 sweet spot','ok'],['vLLM/CUDA','ok'],['Team serving','ok']],
+         body:'Same 5090 capability on a fresh DDR5 platform — faster CPU-side work and a clean dedicated box (swap to Ryzen 9 9900X for full AVX-512 if you offload layers to CPU).',
+         note:'~26M more than the reuse build; worth it only for a dedicated machine or DDR5 CPU-offload headroom.'}}
+   },
+   apple:{
+     true:{title:'Apple · Mac Studio M3 Ultra 96GB', tier:2, apple:1,
+       items:[ it('Box','Mac Studio M3 Ultra · 28C/60GPU · 96GB · 1TB',C.macM3Ultra96,{note:'promo 112.99M to Jun 30'}) ],
+       fit:{vram:'96GB unified · 819 GB/s',
+         pills:[['Fits big models','ok'],['vLLM/CUDA','no'],['Team serving','no']],
+         body:'96GB unified fits 12B + 27B + a large KV cache, even a 70B Q4 — all in one silent, ~480W box.',
+         note:'But no vLLM/CUDA → weaker at the article’s concurrent-batching target. Best for “one big private assistant,” not the agent-team service.'}}
+   }
+  },
+  3:{
+   diy:{
+     true:{title:'DIY · RTX PRO 6000 96GB, reuse base', tier:3,
+       items:[
+         it('GPU','RTX PRO 6000 Blackwell 96GB (Leadtek)',C.gpuPro6000),
+         it('PSU','1000W ATX 3.1',C.psu1000),
+         it('RAM','64GB DDR4 · 2×32 matched kit',C.ram64ddr4up,{note:'DDR4 EOL-spiked — DDR5 64GB is cheaper'}),
+         it('Case','ATX case',C.caseAtx,{est:1}),
+         it('CPU','Intel i5-12400F',C.cpu9900x,{reused:1}),
+         it('Mobo','B760M DS3H',C.moboB650,{reused:1}),
+         it('Store','NVMe (existing)',C.nvme2tb,{reused:1})
+       ],
+       fit:{vram:'96GB GDDR7',
+         pills:[['Article T3','ok'],['vLLM/CUDA','ok'],['Team serving','ok']],
+         body:'96GB on one card = serious <b>vLLM</b> concurrent serving (BF16 12B + 27B + big batches). The article calls a single 48GB card “already serious” — this doubles that.',
+         note:'A 96GB card really wants a stronger CPU/platform; reuse works but consider the fresh build. Only justify Tier 3 once the workload proves it needs it.'}},
+     false:{title:'DIY · RTX PRO 6000 96GB, fresh box', tier:3,
+       items:[
+         it('GPU','RTX PRO 6000 Blackwell 96GB',C.gpuPro6000),
+         it('PSU','1000W ATX 3.1',C.psu1000),
+         it('CPU','Ryzen 9 9900X',C.cpu9900x),
+         it('Mobo','B650 / X870',C.moboB650),
+         it('RAM','64GB DDR5 (128GB recommended)',C.ram64ddr5),
+         it('Store','2TB Gen4 NVMe',C.nvme2tb,{est:1}),
+         it('Case','ATX case',C.caseAtx,{est:1})
+       ],
+       fit:{vram:'96GB GDDR7',
+         pills:[['Article T3','ok'],['vLLM/CUDA','ok'],['Team serving','ok']],
+         body:'Dedicated shared-inference server for many concurrent agents / larger models.',
+         note:'Bump to 128GB system RAM for heavy batching. No Apple option at this tier — vLLM concurrency is the whole point.'}}
+   },
+   apple:null
+  }
+ };
+}
+
+// confirmed phongvu product pages, keyed by VND price (non-reused items are unique by price)
+const URLByVnd={};
+URLByVnd[35.59*M]='https://phongvu.vn/vga-asus-tuf-gaming-rtx-5070-ti-16gb-gddr7-oc-edition--s250203310';
+URLByVnd[44.99*M]='https://phongvu.vn/card-man-hinh-vga-msi-geforce-rtx-5080-16g-ventus-3x-oc-plus--s250116220';
+URLByVnd[119.99*M]='https://phongvu.vn/vga-asus-rog-astral-rtx-5090-32gb-gddr7-oc-edition--s250204648';
+URLByVnd[405.9*M]='https://phongvu.vn/vga-leadtek-nvidia-rtx-pro-6000-96g-workstation--s251102052';
+URLByVnd[10.49*M]='https://phongvu.vn/cpu-amd-ryzen-9-7900-3-7ghz-boost-to-5-4ghz--s230104440';
+URLByVnd[12.7*M]='https://phongvu.vn/cpu-amd-ryzen-9-9900x-4-4-ghz-boost-to-5-6-ghz--s240803312';
+URLByVnd[7.49*M]='https://phongvu.vn/bo-mach-chinh-mainboard-gigabyte-b650-aorus-elite-ax--s230100312';
+URLByVnd[6.99*M]='https://phongvu.vn/bo-nho-trong-ram-desktop-adata-xpg-lancer-32gbx2-ddr5-6000mhz-black-rgb-ax5u6000c3032g-dclarbk--s230800426';
+URLByVnd[11.5*M]='https://phongvu.vn/bo-nho-gigabyte-designare-64gb-2x32gb-ddr4-3200-gpdsg64g32--s200500325';
+URLByVnd[4.39*M]='https://phongvu.vn/nguon-may-tinh-corsair-rm1000e-atx-3-1-cybenetics-gold-full-modul--s250309516';
+URLByVnd[82.99*M]='https://phongvu.vn/may-tinh-bo-apple-mac-studio-m4-max-16cpu-40gpu-64gb-1tb-z1cd00292--s250707601';
+URLByVnd[116.49*M]='https://phongvu.vn/mac-studio-m3-ultra-28-cpu-60-gpu-96gb-1tb--s250414549';
+
+// Buy list = the CURRENT bundle's items, filtered by the reuse toggle (reused parts drop off).
+function renderSources(bundle){
+  const tb=document.getElementById('srcBody'); tb.innerHTML='';
+  document.getElementById('srcTitle').textContent='Buy list & PhongVu sources — '+bundle.title;
+  const reuseOn = state.reuse && state.plat==='diy';
+  let buy=0; const reused=[];
+  bundle.items.forEach(item=>{
+    if(item.reused && reuseOn){ reused.push(item.name); return; }
+    buy+=item.vnd;
+    const url=URLByVnd[item.vnd];
+    const src=url? '<a href="'+url+'" target="_blank" rel="noopener">phongvu.vn ↗</a>'
+                 : '<span class="est">est — confirm</span>';
+    const tr=document.createElement('tr');
+    tr.innerHTML='<td><span class="cat">'+item.cat+'</span>'+item.name+(item.est?' <span class="est">est</span>':'')
+      +(item.note?' <span class="est" style="color:var(--accent2)">'+item.note+'</span>':'')+'</td>'
+      +'<td class="price">'+fmt(item.vnd)+'</td><td>'+src+'</td>';
+    tb.appendChild(tr);
+  });
+  document.getElementById('srcBuyTotal').textContent=fmt(buy);
+  const foot=document.getElementById('srcReused');
+  if(state.plat==='apple') foot.innerHTML='Complete Apple box — a single SKU; nothing else to buy.';
+  else if(reused.length) foot.innerHTML='<strong>Reused from podmaster (not purchased):</strong> '+reused.join(', ')+'. Plus the existing screen, keyboard, mouse, and wired LAN switch.';
+  else foot.innerHTML='Fresh DIY build — every component purchased new.';
+}
+
+const state={tier:'2',plat:'diy',reuse:true,cur:'vnd',gpu:'5070ti'};
+
+function fmt(vnd){
+  if(state.cur==='usd'){return '$'+Math.round(vnd/FX).toLocaleString('en-US');}
+  return (vnd).toLocaleString('en-US')+' ₫';
+}
+function pressGroup(id,attr,val){
+  document.querySelectorAll('#'+id+' button').forEach(b=>{
+    b.setAttribute('aria-pressed', b.dataset[attr]===val ? 'true':'false');
+  });
+}
+function render(){
+  // Apple has no T3 -> force diy
+  const appleAvail = state.tier!=='3';
+  document.querySelectorAll('#platSeg button').forEach(b=>{
+    if(b.dataset.plat==='apple') b.disabled=!appleAvail;
+  });
+  if(!appleAvail && state.plat==='apple'){state.plat='diy';pressGroup('platSeg','plat','diy');}
+
+  document.getElementById('gpuGrp').style.display = (state.tier==='1' && state.plat==='diy') ? '' : 'none';
+
+  const B=bundles(state.gpu)[state.tier][state.plat];
+  const b = B ? (B[String(state.plat==='apple'?true:state.reuse)] || B['true']) : null;
+  // apple keyed only by true; diy keyed by reuse bool
+  const bundle = state.plat==='apple' ? B['true'] : B[String(state.reuse)];
+
+  const tbody=document.getElementById('bomBody');
+  tbody.innerHTML='';
+  let total=0;
+  bundle.items.forEach(item=>{
+    const reused = !!item.reused && state.reuse && state.plat==='diy';
+    const cost = reused ? 0 : item.vnd;
+    total += cost;
+    const tr=document.createElement('tr');
+    if(reused) tr.className='reused';
+    const nameHtml = (reused? '<s>'+item.name+'</s>' : item.name)
+       + (item.est? ' <span class="est">est</span>':'')
+       + (item.note? ' <span class="est" style="color:var(--accent2)">'+item.note+'</span>':'');
+    tr.innerHTML='<td class="item"><span class="cat">'+item.cat+'</span>'+nameHtml+'</td>'
+      +'<td class="price">'+(reused? '<span style="color:var(--reuse)">reused · 0</span>' : fmt(item.vnd))+'</td>';
+    tbody.appendChild(tr);
+  });
+  document.getElementById('bomTitle').textContent=bundle.title;
+  document.getElementById('bomTotal').textContent=fmt(total);
+
+  const badges=document.getElementById('bomBadges');
+  badges.innerHTML='<span class="badge tier">Tier '+bundle.tier+'</span>'
+    + (bundle.rec? ' <span class="badge rec">★ Recommended</span>':'')
+    + (bundle.apple? ' <span class="badge">Apple</span>':'');
+  document.getElementById('bomCard').className = 'card'+(bundle.rec?' recommend':'');
+
+  const f=bundle.fit;
+  document.getElementById('fitVram').textContent=f.vram;
+  document.getElementById('fitBody').innerHTML=f.body;
+  document.getElementById('fitNote').textContent=f.note;
+  const pr=document.getElementById('fitPills');
+  pr.innerHTML='';
+  f.pills.forEach(p=>{const s=document.createElement('span');s.className='pill '+p[1];s.textContent=(p[1]==='ok'?'✓ ':p[1]==='no'?'✗ ':'')+p[0];pr.appendChild(s);});
+
+  renderSources(bundle);
+}
+
+document.getElementById('tierSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;state.tier=b.dataset.tier;pressGroup('tierSeg','tier',state.tier);render();});
+document.getElementById('platSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled)return;state.plat=b.dataset.plat;pressGroup('platSeg','plat',state.plat);render();});
+document.getElementById('curSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;state.cur=b.dataset.cur;pressGroup('curSeg','cur',state.cur);render();});
+document.getElementById('gpuSel').addEventListener('change',e=>{state.gpu=e.target.value;render();});
+document.getElementById('reuseChk').addEventListener('change',e=>{state.reuse=e.target.checked;document.getElementById('reuseTxt').textContent=e.target.checked?'On':'Off';render();});
+
+render();
+</script>
+</body>
+</html>
