@@ -13,6 +13,20 @@ The repo — [strands-agents/shell](https://github.com/strands-agents/shell) —
 
 The short version: **Strands Shell isn't a sandbox, and it isn't a container runtime. It's a mediation layer — and that's exactly what makes it interesting.**
 
+### Community first reactions
+
+The launch-day conversation on X surfaced clear signals about what people want from a tool like this:
+
+- **Dynamic policy reconfiguration** — Geoff Goodman ([@filearts](https://x.com/filearts)) asked whether network policies can change at runtime: *"It seems like policy is declarative. If we want some dynamism on a running shell is that possible?"* Clare confirmed domain policy is evaluated on each network call, making runtime changes feasible, but there's no mechanism for it yet.
+
+- **WASM browser target** — Adnan Khan ([@adnanthekhan](https://x.com/adnanthekhan)) asked about `wasm32-unknown-unknown` for in-browser use: *"Lots of fun use-cases for a light agent harness that runs entirely in-browser."* Clare's response: *"Oh I like that idea!"*
+
+- **Drop-in binary for coding agents** — Matt Rickard ([@mattrickard](https://x.com/mattrickard)) wants to use it as a transparent shell replacement: *"Any ideas to run it as a binary + config? Codex / Claude run commands through this directly instead of via bindings."* Clare pointed to the MCP server path.
+
+- **Adjacent projects** — [vercel/just-bash](https://github.com/vercel/just-bash) and [torkbot/sandbox](https://github.com/torkbot/sandbox) (libkrun-backed microVMs) came up as related approaches to agent sandboxing, each trading off different points on the mediation-vs-isolation spectrum.
+
+No formal roadmap yet — the repo has zero open issues and zero milestones — but the community vectors are clear.
+
 ---
 
 ## What it actually is
@@ -105,7 +119,11 @@ Before any HTTP request, the kernel calls `check_url(url)`. It blocks:
 - Private ranges (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)
 - Any hostname that resolves to a blocked IP
 
-If the URL passes, `resolve_credential(url)` checks if a `CredEntry` matches. Each credential has a `kind` (currently `"bearer"`), a set of HTTP methods, a URL pattern, and either an inline `api_key` or an `api_key_env` reference. The kernel injects `Authorization: Bearer <token>` into the request — the agent's code never sees the credential.
+If the URL passes, `resolve_credential(url)` checks if a `CredEntry` matches. Each credential has a `kind` (currently `"bearer"`), a set of HTTP methods, a URL pattern, and either an inline `api_key` or an `api_key_env` reference. The kernel injects `Authorization: Bearer <token>` into the request — the agent's shell code never sees the credential.
+
+This "agent never sees the credential" pattern is an emerging design principle with two distinct architectural approaches. [Pipelock](https://github.com/luckyPipewrench/pipelock) (720★, Apache 2.0) takes the opposite placement: an out-of-process **network proxy** that sits between the agent and the internet. Its design is "capability separation" — the agent has secrets in its environment but no direct network access; Pipelock has network access but can't access the agent's secrets. It scans outbound requests for credential leaks (62 DLP patterns, with optional redaction that rewrites matched values to typed placeholders like `<pl:aws-access-key:1>` before they leave), blocks exfiltration, and injects auth at the boundary. Bonus: kill switch, Ed25519-signed flight recorder, and OS-native process sandbox (Landlock + seccomp on Linux).
+
+Strands Shell and Pipelock aren't competitors — they compose. Pipelock at the agent boundary for full egress control; Strands Shell inside the execution context for filesystem and command mediation. Same principle, different layer in the stack.
 
 ### 3. Command allowlisting
 The shell ships with a curated set of commands (`grep`, `curl`, `jq`, `sort`, `wc`, `head`, `cat`, `ls`, `find`, `sed`, `awk`, `xargs`, and more — full list in [COMMANDS.md](https://github.com/strands-agents/shell/blob/main/COMMANDS.md)). There's no `ssh`, no `scp`, no `nc`, no package manager. You can configure which commands are available, but you can't add arbitrary binaries — there's no `exec`.
@@ -114,7 +132,7 @@ The shell ships with a curated set of commands (`grep`, `curl`, `jq`, `sort`, `w
 
 ## Where this fits: the three-axis framework
 
-Every time a new agent execution tool ships, people compare it to the wrong things. Strands Shell, Code Interpreter, Claude Code Agent tool, and CloudFlare Code Mode operate on **different axes**. Here's the framework:
+You may be trying to place this, like I was — is it a sandbox? A container runtime? A competitor to Claude Code's Agent tool? It's none of those. Strands Shell, Code Interpreter, Claude Code Agent tool, and CloudFlare Code Mode operate on **different axes**. Here's the framework:
 
 ### Axis 1: Execution model — *how* does code run?
 
@@ -188,9 +206,9 @@ They compose well: a Strands agent running on AgentCore Runtime can use Code Int
 
 ## Three use cases where Strands Shell shines
 
-### 1. SRE / DevOps agents
+### 1. Configuration auditing with mediation
 
-An SRE agent investigating an incident doesn't need `import pandas`. It needs `grep ERROR /var/log | jq '.timestamp' | sort | uniq -c`. Strands Shell gives you that without giving the agent access to your real `/var/log`. Bind the log directory in copy mode, let the agent explore, get the structured answer back.
+An agent auditing Nginx configurations across a fleet doesn't need access to the whole filesystem. Bind `/etc/nginx` in copy mode — config files are small, the copy is instant, and the VFS is isolated. The agent runs `grep -rn "listen 80" /etc/nginx | wc -l`, sorts by server block, and returns a structured report. It never sees `/etc/shadow`, never touches the real filesystem. For larger or remote data, direct mode with `readonly: true` lets the agent stream through logs on an attached volume without copying them into memory first.
 
 ### 2. Eval harnesses
 
@@ -246,4 +264,4 @@ Strands Shell is one of those tools that's easy to mis-categorize because it loo
 
 ---
 
-*Thanks to the [agentcore-docs](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html) offline knowledge bank for grounding the Code Interpreter comparison with source-level citations. The Strands Shell source code exploration — VFS internals, bind semantics, credential injection, SSRF guard — was done against the [strands-agents/shell](https://github.com/strands-agents/shell) repo at commit `9bf907c`.*
+*Strands Shell source code exploration — VFS internals, bind semantics, credential injection, SSRF guard — was done against the [strands-agents/shell](https://github.com/strands-agents/shell) repo at commit `9bf907c`.*
