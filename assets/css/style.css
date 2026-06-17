@@ -425,6 +425,40 @@ pre code { background: none; padding: 0; color: var(--ink); }
 .post tbody tr:last-child td,
 .page tbody tr:last-child td { border-bottom: 0; }
 
+/* Zebra striping for readability on data-dense comparison tables */
+.post tbody tr:nth-child(odd),
+.page tbody tr:nth-child(odd) {
+  background: color-mix(in srgb, var(--paper-tint) 60%, transparent);
+}
+
+/* Keep first-column labels from wrapping awkwardly */
+.post td:first-child, .page td:first-child,
+.post th:first-child, .page th:first-child {
+  white-space: nowrap;
+}
+
+/* Responsive: horizontal scroll on narrow viewports */
+@media (max-width: 640px) {
+  .post table, .page table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    white-space: nowrap;
+  }
+  .post td, .page td,
+  .post th, .page th {
+    white-space: normal;
+  }
+  .post td:first-child, .page td:first-child,
+  .post th:first-child, .page th:first-child {
+    white-space: nowrap;
+    position: sticky;
+    left: 0;
+    background: var(--bg);
+    z-index: 1;
+  }
+}
+
 /* ---- Footer --------------------------------------------------------------- */
 .site-footer {
   position: relative;
