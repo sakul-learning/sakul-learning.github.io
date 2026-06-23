@@ -269,6 +269,8 @@ So the CDK version is not a single trick. It is a stack of supported mechanisms:
 
 That is the model we should prefer. Put policy in libraries and validation systems that the framework knows about. Do not smuggle policy through a registry hostname.
 
+This is where the AWS CDK story is stronger than the Terraform-registry story. If you choose a properly designed IaC framework, basic compliance does not require a custom registry tax. The framework already gives you places to put the policy: construct libraries for the approved path, Aspects for broad checks, `Validations` for synthesis-time failures and acknowledgements, and cdk-nag packs for existing security rules. For this S3 example, the AWS Solutions pack already checks the important failures: missing access logs, unrestricted public access, missing default encryption, and missing SSL enforcement.
+
 ## Why compliance.tf exists
 
 The charitable read is that compliance.tf exists because many organizations are already stuck with broad public Terraform modules.
