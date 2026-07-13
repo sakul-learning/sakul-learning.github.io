@@ -44,6 +44,9 @@ sources:
   - title: "Transforming data with JSONata in Step Functions"
     url: "https://docs.aws.amazon.com/step-functions/latest/dg/transforming-data.html"
     note: "AWS documentation for selecting JSONata as a state-machine query language and using it for data transformation and Choice routing."
+  - title: "AWS CDK QueryLanguage"
+    url: "https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_stepfunctions.QueryLanguage.html"
+    note: "AWS CDK reference: a top-level JSONATA state-machine setting requires JSONata states; the CDK task constructs also expose queryLanguage."
   - title: "Strands Agents interventions"
     url: "https://strandsagents.com/docs/user-guide/concepts/agents/interventions"
     note: "Strands hooks can proceed, deny, guide, confirm, or transform agent actions, but are in-process guardrails rather than an identity or authorization service."
@@ -95,26 +98,30 @@ That is useful policy synthesis, not delegation. It compiles the authority requi
 
 ### The CDK mechanical detail
 
+{% raw %}
 ```ts
 const diagnose = new tasks.LambdaInvoke(this, 'Diagnose incident', {
   lambdaFunction: diagnosisBridge,
+  queryLanguage: sfn.QueryLanguage.JSONATA,
   payload: sfn.TaskInput.fromObject({
-    incidentId: sfn.JsonPath.stringAt('$.incidentId'),
-    authorityEnvelope: sfn.JsonPath.objectAt('$.authorityEnvelope'),
+    incidentId: '{% $states.input.incidentId %}',
+    authorityEnvelope: '{% $states.input.authorityEnvelope %}',
   }),
 });
 
 const requestVerdict = new tasks.SqsSendMessage(this, 'Request commander verdict', {
   queue: approvalQueue,
   integrationPattern: sfn.IntegrationPattern.WAIT_FOR_TASK_TOKEN,
+  queryLanguage: sfn.QueryLanguage.JSONATA,
   messageBody: sfn.TaskInput.fromObject({
-    processId: sfn.JsonPath.stringAt('$$.Execution.Id'),
-    evidence: sfn.JsonPath.objectAt('$.evidence'),
-    taskToken: sfn.JsonPath.taskToken,
+    processId: '{% $states.context.Execution.Id %}',
+    evidence: '{% $states.input.evidence %}',
+    taskToken: '{% $states.context.Task.Token %}',
   }),
 });
 
 const workflow = new sfn.StateMachine(this, 'IncidentOuterLoop', {
+  queryLanguage: sfn.QueryLanguage.JSONATA,
   definitionBody: sfn.DefinitionBody.fromChainable(
     diagnose.next(requestVerdict),
   ),
@@ -122,6 +129,9 @@ const workflow = new sfn.StateMachine(this, 'IncidentOuterLoop', {
   // the task permissions above into it.
 });
 ```
+{% endraw %}
+
+This is deliberately one **JSONata-only** state machine. The CDK task and state-machine `queryLanguage` settings make the `&#123;% … %&#125;` values JSONata expressions; `$states.input` is the current state's input and `$states.context` provides the execution ID and callback task token. Do not use `sfn.JsonPath.*`, `$$.Execution.Id`, or `$$.Task.Token` in this definition: those are the JSONPath/CDK form and would be incompatible with the top-level `JSONATA` setting.
 
 In this shape, CDK synthesizes the workflow role's `lambda:InvokeFunction` permission for `diagnosisBridge` and `sqs:SendMessage` permission for `approvalQueue`. That is exactly the desired aggregation **within the workflow's execution identity**. The next boundary is still separate: `diagnosisBridge` has its own Lambda execution role and, if it invokes AgentCore, AgentCore has its own runtime/workload identity and execution role. The approval application and JIT deployment broker likewise keep their distinct identities and policies.
 

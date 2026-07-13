@@ -29,6 +29,9 @@
 - **AWS Step Functions — Transforming data with JSONata**  
   https://docs.aws.amazon.com/step-functions/latest/dg/transforming-data.html
   - Current AWS guidance for choosing JSONata as the state-machine query language and for data transformation/routing.
+- **AWS CDK — QueryLanguage**
+  https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_stepfunctions.QueryLanguage.html
+  - A top-level `JSONATA` state-machine setting requires JSONata states; `LambdaInvoke` and `SqsSendMessage` also expose `queryLanguage` for the CDK example.
 - **AWS Security Blog — Cedar authorization for multi-agent chains**  
   https://aws.amazon.com/blogs/security/enforce-least-privilege-authorization-in-multi-agent-ai-chains-using-cedar/
   - Reference pattern that separately evaluates agent-to-tool, agent-to-agent delegation, and originating-user authorization.
