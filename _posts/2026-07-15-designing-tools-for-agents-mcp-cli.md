@@ -18,6 +18,9 @@ sources:
   - title: "MCP Tools specification"
     url: "https://modelcontextprotocol.io/specification/2025-11-25/server/tools"
     note: "The protocol definition for discovering and invoking MCP tools."
+  - title: "We Cut 40% of Our MCP Tools to Get Into Claude's Connector Directory"
+    url: "https://www.elastic.co/search-labs/blog/mcp-connector-claude-directory"
+    note: "Elastic's account of the Claude connector review and the resulting tool-catalog changes."
 ---
 
 An agent does not need another drawer full of tiny, mysterious buttons. It needs a small control panel with labels, guardrails, and a big **"try this next"** arrow.
@@ -60,6 +63,24 @@ skillrig add terraform-plan-review --dry-run
 ```
 
 A useful test: can someone explain the command or tool without saying “well, first call three other things”?
+
+### Coherent does not mean catch-all
+
+There is an important constraint on outcome-oriented design: **do not hide incompatible effects behind a mode switch**. A REST-shaped wrapper such as `api_request({ method, path, body })`, or `manage_attachments({ action: "get" | "delete" })`, turns the model into an API client author at runtime. It also makes the tool's risk impossible to state honestly: is it read-only or destructive?
+
+[Elastic's Claude connector review](https://www.elastic.co/search-labs/blog/mcp-connector-claude-directory) makes this concrete. The review required universal MCP tool annotations and read/write separation. Elastic split `cases.attachments` into `cases.get_attachments` and `cases.manage_attachments`, removed an ambiguous action tool, and reduced its default Elasticsearch catalog from 36 tools to 22.
+
+That is not a contradiction with composing a deterministic workflow such as `create_project`. The distinction is **one accountable outcome with a stable safety profile** versus a remote-control wrapper that asks the model to choose arbitrary transport operations. Combine predictable setup steps when they serve one outcome; split operations when their authority, reversibility, approval requirement, or recovery path differs.
+
+A practical rule:
+
+```text
+one tool = one understandable outcome + one honest risk label
+```
+
+For MCP, make that label machine-readable with accurate annotations: `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. They help a host choose sensible approval defaults—such as auto-allowing a document lookup but requiring approval for workflow generation—but they are not authorization. The server must still enforce permissions and validate requests.
+
+The result is the real alternative to “just wrap your REST API”: a deliberately small agent interface. Keep operations that agents can select safely and recover from; remove or redesign endpoints that are merely implementation plumbing, unavailable in a customer's product tier, or too ambiguous to describe precisely.
 
 ## 2. Treat descriptions as production code
 
@@ -163,12 +184,13 @@ For MCP, the tool description and host should require confirmation for high-impa
 
 Before adding an agent-facing tool or command, ask:
 
-1. Does it represent one understandable outcome?
+1. Does it represent one understandable outcome **and** one stable safety profile?
 2. Can the agent discover and invoke it from its own interface—tool metadata or `--help`?
-3. Do its errors preserve the cause and state the recovery?
-4. Is its output only as large as the next decision needs?
-5. Does it point to the next relevant action?
-6. Does a risky mutation require a real human decision and provide a preview?
+3. Do its annotations accurately communicate read-only, destructive, idempotent, and external-world behavior?
+4. Do its errors preserve the cause and state the recovery?
+5. Is its output only as large as the next decision needs?
+6. Does it point to the next relevant action?
+7. Does a risky mutation require a real human decision and provide a preview?
 
 If the answer is yes, you have not merely exposed an API. You have given an agent a map.
 
@@ -177,3 +199,4 @@ If the answer is yes, you have not merely exposed an API. You have given an agen
 - Ibrahim Mohammed, ["From REST to MCP (2/2): The Design Shift"](https://dev.to/ibrahim_mohammed_47/from-rest-to-mcp-22-the-design-shift-4bda)
 - Skillrig, ["Agentic Go CLI Design"](https://github.com/skillrig/cli/tree/main/.agents/skills/agentic-go-cli-design)
 - Model Context Protocol, ["Tools specification"](https://modelcontextprotocol.io/specification/2025-11-25/server/tools)
+- Sean Story, Elastic, ["We Cut 40% of Our MCP Tools to Get Into Claude's Connector Directory"](https://www.elastic.co/search-labs/blog/mcp-connector-claude-directory)
